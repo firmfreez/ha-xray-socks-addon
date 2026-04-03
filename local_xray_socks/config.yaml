@@ -2,7 +2,7 @@ name: "Local Xray SOCKS"
 version: "0.1.0"
 slug: "local_xray_socks"
 description: "Xray client that exposes a local SOCKS5 proxy for Keenetic"
-url: "https://github.com/FirmFreez/home-assistant-addons"
+url: "https://github.com/firmfreez/ha-xray-socks-addon"
 startup: services
 boot: auto
 init: false

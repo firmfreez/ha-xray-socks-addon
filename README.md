@@ -14,7 +14,7 @@ In Home Assistant, open:
 
 Add the Git repository URL:
 
-`https://github.com/FirmFreez/home-assistant-addons`
+`https://github.com/firmfreez/ha-xray-socks-addon`
 
 After that, install `Local Xray SOCKS`, fill in the VLESS settings, and start the add-on.
 
