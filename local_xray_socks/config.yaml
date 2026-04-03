@@ -1,0 +1,34 @@
+name: "Local Xray SOCKS"
+version: "0.1.0"
+slug: "local_xray_socks"
+description: "Xray client that exposes a local SOCKS5 proxy for Keenetic"
+url: "https://github.com/FirmFreez/home-assistant-addons"
+startup: services
+boot: auto
+init: false
+arch:
+  - aarch64
+
+ports:
+  1080/tcp: 1080
+
+ports_description:
+  1080/tcp: "SOCKS5 port for Keenetic"
+
+options:
+  server: ""
+  port: 443
+  uuid: ""
+  sni: ""
+  flow: ""
+  socks_port: 1080
+  loglevel: "warning"
+
+schema:
+  server: str
+  port: port
+  uuid: str
+  sni: str
+  flow: "str?"
+  socks_port: port
+  loglevel: "list(none|error|warning|info|debug)"
