@@ -16,19 +16,25 @@ ports_description:
   1080/tcp: "SOCKS5 port for Keenetic"
 
 options:
+  link: ""
   server: ""
   port: 443
   uuid: ""
   sni: ""
   flow: ""
+  fingerprint: ""
+  alpn: ""
   socks_port: 1080
   loglevel: "warning"
 
 schema:
+  link: "str?"
   server: str
   port: port
   uuid: str
   sni: str
   flow: "str?"
+  fingerprint: "str?"
+  alpn: "str?"
   socks_port: port
   loglevel: "list(none|error|warning|info|debug)"
