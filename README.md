@@ -20,7 +20,8 @@ After that, install `Local Xray SOCKS`, fill in the VLESS settings, and start th
 
 ## Add-on Options
 
-- `link`: Full `vless://...` URI. If set, the add-on parses it and overrides the manual connection fields below.
+- `subscription_url`: VLESS subscription URL. Used when `link` is empty.
+- `link`: Full `vless://...` URI. If set, the add-on parses it and overrides `subscription_url` and the manual connection fields below.
 - `server`: VLESS server hostname or IP
 - `port`: VLESS server port, usually `443`
 - `uuid`: Client UUID from 3x-ui
@@ -28,8 +29,11 @@ After that, install `Local Xray SOCKS`, fill in the VLESS settings, and start th
 - `flow`: Optional VLESS flow, leave empty unless your server requires it
 - `fingerprint`: Optional TLS fingerprint such as `chrome`
 - `alpn`: Optional ALPN list as comma-separated values, for example `h2,http/1.1`
-- `socks_port`: Local SOCKS5 port exposed by the add-on
-- `loglevel`: Xray log level
+- `socks_port`: Local SOCKS5 port exposed by the add-on (default: 1080)
+- `loglevel`: Xray log level (default: `error` for cleaner logs)
+  - Use `error` or `warning` for production
+  - Use `info` or `debug` only for troubleshooting
+  - Higher verbosity = more CPU usage and disk I/O
 
 ## Example
 
@@ -37,4 +41,45 @@ You can paste a full VLESS link like:
 
 `vless://UUID@example.com:443?type=tcp&encryption=none&security=tls&fp=chrome&alpn=http%2F1.1&flow=xtls-rprx-vision`
 
+Or use a subscription URL:
+
+```yaml
+subscription_url: "https://example.com/subscription"
+link: ""
+server: ""
+uuid: ""
+sni: ""
+```
+
 When the add-on starts, Xray logs are written directly to the add-on log output so you can verify connections from the Home Assistant UI.
+
+## Performance Optimizations (Built-in)
+
+This add-on includes tuned defaults for a fast, low-noise SOCKS5 proxy:
+
+**Network Tuning:**
+- **BBR Congestion Control**: Uses BBR when the host kernel supports it
+- **8MB Buffers**: Larger buffers for high-speed connections
+- **TCP Fast Open**: Reduces TLS handshake by 1 RTT
+- **TCP No Delay**: Minimizes packet buffering delays
+
+**Memory & Connection Management:**
+- **Large Buffer Pool**: 65KB per stream (3.25x increase)
+- **Higher Connection Limits**: Tuned policy for multi-client setups
+- **Optimized TCP Segment Size**: 1460 bytes for MTU 1500 networks
+
+**DNS & Routing:**
+- **DNS Caching**: Fast domain resolution with public DNS resolvers (8.8.8.8, 8.8.4.4, 1.1.1.1)
+- **IP-based Domain Strategy**: Prevents DNS leaks
+- **Keep-Alive: 600s**: Long connection timeout for stability
+
+**Disabled for Speed:**
+- Streaming stats collection (zero CPU overhead)
+- User statistics tracking
+- Unnecessary fallbacks
+
+**Expected Performance:**
+- **Latency**: Lower latency on networks where TCP tuning is supported
+- **Throughput**: Better throughput on high-speed connections
+- **Stability**: Longer keep-alive for idle connections
+- **CPU Usage**: Lower overhead from disabled stats
