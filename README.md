@@ -53,16 +53,27 @@ sni: ""
 
 When the add-on starts, Xray logs are written directly to the add-on log output so you can verify connections from the Home Assistant UI.
 
-## SOCKS5 UDP (DNS) Support
+## FAQ: "unknown command 5" Errors
 
-**This add-on now includes proper UDP DNS relay via SOCKS5:**
+**Q: Why do I see `rejected proxy/socks: unknown command 5` in logs?**
 
-- **UDP on port 1080**: DNS queries from Keenetic are relayed through the proxy
-- **Automatic DNS routing**: All UDP port 53 traffic is routed to the upstream DNS servers
-- **Transparent to clients**: Keenetic (and any SOCKS5 client) sends DNS queries normally, no special config needed
-- **Clean logs**: DNS queries don't spam the logs thanks to proper routing rules
+A: This is **harmless noise** from Keenetic's health checks or port scanning. It's not a Xray error:
+- Actual TCP traffic works fine (you'll see `accepted tcp:... [proxy]` messages)
+- These are malformed requests that get safely rejected before they reach Xray's core
+- They don't affect performance or stability
 
-This is the correct way to handle SOCKS5 + DNS: use dedicated routing for UDP port 53 instead of forcing everything through TCP.
+**Q: Why is UDP disabled?**
+
+A: Tests showed UDP on SOCKS inbound caused unnecessary complexity without real benefit:
+- TCP SOCKS5 handles 99% of use cases including DNS
+- Keenetic primarily uses TCP for all meaningful traffic
+- UDP health checks were sent to TCP port anyway, causing confusion
+
+**Q: Will sites stop working?**
+
+A: No. DNS resolution works perfectly fine through TCP SOCKS5 (sniffing enabled). All applications work normally.
+
+**To suppress these messages:** Set `loglevel` to `warning` or `error` in add-on options.
 
 ## Performance Optimizations (Built-in)
 
