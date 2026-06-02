@@ -6,46 +6,6 @@ urldecode() {
   printf '%b' "${value//%/\\x}"
 }
 
-extract_vless_link() {
-  local content="$1"
-  printf '%s\n' "${content}" | tr '\r' '\n' | grep -m1 '^vless://' || true
-}
-
-fetch_subscription_link() {
-  local subscription_url="$1"
-  local content encoded decoded link padding
-
-  bashio::log.info "Fetching VLESS subscription"
-  content="$(curl -fsSL --connect-timeout 10 --max-time 30 "${subscription_url}")" || {
-    bashio::log.fatal "Failed to fetch subscription URL"
-    exit 1
-  }
-
-  link="$(extract_vless_link "${content}")"
-  if [ -n "${link}" ]; then
-    printf '%s' "${link}"
-    return 0
-  fi
-
-  encoded="$(printf '%s' "${content}" | tr -d '\r\n ')"
-  padding=$(( ${#encoded} % 4 ))
-  if [ "${padding}" -eq 2 ]; then
-    encoded="${encoded}=="
-  elif [ "${padding}" -eq 3 ]; then
-    encoded="${encoded}="
-  fi
-
-  decoded="$(printf '%s' "${encoded}" | base64 -d 2>/dev/null || true)"
-  link="$(extract_vless_link "${decoded}")"
-  if [ -n "${link}" ]; then
-    printf '%s' "${link}"
-    return 0
-  fi
-
-  bashio::log.fatal "Subscription does not contain a supported vless:// link"
-  exit 1
-}
-
 parse_vless_link() {
   local link="$1"
   local body query main creds hostport key_value key raw_key raw_value decoded_key decoded_value
@@ -125,7 +85,6 @@ parse_vless_link() {
 }
 
 LINK="$(bashio::config 'link')"
-SUBSCRIPTION_URL="$(bashio::config 'subscription_url')"
 SERVER="$(bashio::config 'server')"
 PORT="$(bashio::config 'port')"
 UUID="$(bashio::config 'uuid')"
@@ -135,10 +94,6 @@ FINGERPRINT="$(bashio::config 'fingerprint')"
 ALPN="$(bashio::config 'alpn')"
 SOCKS_PORT="$(bashio::config 'socks_port')"
 LOGLEVEL="$(bashio::config 'loglevel')"
-
-if [ -z "${LINK}" ] && [ -n "${SUBSCRIPTION_URL}" ]; then
-  LINK="$(fetch_subscription_link "${SUBSCRIPTION_URL}")"
-fi
 
 if [ -n "${LINK}" ]; then
   parse_vless_link "${LINK}"
@@ -189,31 +144,6 @@ jq -n \
       access: "/dev/stdout",
       error: "/dev/stderr"
     },
-    dns: {
-      servers: [
-        "8.8.8.8",
-        "8.8.4.4",
-        "1.1.1.1"
-      ],
-      hosts: {},
-      clientIp: null,
-      queryStrategy: "UseIPv4",
-      disableCache: false,
-      disableFallback: false,
-      tag: "dns_resolver"
-    },
-    routing: {
-      domainStrategy: "IPIfNonMatch",
-      rules: [
-        {
-          type: "field",
-          domain: [
-            "geosite:geolocation-!cn"
-          ],
-          outbound: "proxy"
-        }
-      ]
-    },
     inbounds: [
       {
         listen: "0.0.0.0",
@@ -221,25 +151,11 @@ jq -n \
         protocol: "socks",
         settings: {
           auth: "noauth",
-          udp: false,
-          userLevel: 0
+          udp: true
         },
         sniffing: {
           enabled: true,
-          destOverride: ["http", "tls", "quic"],
-          metadataOnly: false,
-          routeOnly: false
-        },
-        streamSettings: {
-          sockopt: {
-            tcpFastOpen: true,
-            tcpNoDelay: true,
-            tcpCongestion: "bbr",
-            receiveBufferSize: 8388608,
-            sendBufferSize: 8388608,
-            mark: 255,
-            tcpMaxSegSize: 1460
-          }
+          destOverride: ["http", "tls", "quic"]
         }
       }
     ],
@@ -260,52 +176,22 @@ jq -n \
           security: "tls",
           tlsSettings: $tls_settings,
           sockopt: {
-            tcpFastOpen: true,
-            tcpNoDelay: true,
-            tcpCongestion: "bbr",
-            tcpKeepAliveIdle: 600,
-            tcpKeepAliveInterval: 30,
-            tcpUserTimeout: 30000,
-            tcpMaxSegSize: 1460,
-            receiveBufferSize: 8388608,
-            sendBufferSize: 8388608,
-            mark: 255
+            tcpKeepAliveIdle: 45,
+            tcpKeepAliveInterval: 15,
+            tcpUserTimeout: 10000
           }
         },
         tag: "proxy"
       },
       {
         protocol: "freedom",
-        settings: {
-          domainStrategy: "UseIPv4",
-          userLevel: 0
-        },
         tag: "direct"
       },
       {
         protocol: "blackhole",
         tag: "block"
       }
-    ],
-    policy: {
-      levels: {
-        "0": {
-          uplinkOnly: 0,
-          downlinkOnly: 0,
-          statsUserUplink: false,
-          statsUserDownlink: false,
-          bufferSize: 65536,
-          connIdle: 600,
-          downConns: 1000,
-          upConns: 1000
-        }
-      },
-      system: {
-        statsInbound: false,
-        statsOutbound: false,
-        statsUser: false
-      }
-    }
+    ]
   }' > /usr/local/etc/xray/config.json
 
 bashio::log.info "Resolved VLESS target ${SERVER}:${PORT} with SNI ${SNI}"
