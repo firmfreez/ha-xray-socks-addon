@@ -1,5 +1,5 @@
 name: "Local Xray SOCKS"
-version: "0.1.0"
+version: "0.2.0"
 slug: "local_xray_socks"
 description: "Xray client that exposes a local SOCKS5 proxy for Keenetic"
 url: "https://github.com/firmfreez/ha-xray-socks-addon"
@@ -17,24 +17,10 @@ ports_description:
 
 options:
   link: ""
-  server: ""
-  port: 443
-  uuid: ""
-  sni: ""
-  flow: ""
-  fingerprint: ""
-  alpn: ""
   socks_port: 1080
   loglevel: "warning"
 
 schema:
-  link: "str?"
-  server: str
-  port: port
-  uuid: str
-  sni: str
-  flow: "str?"
-  fingerprint: "str?"
-  alpn: "str?"
+  link: str
   socks_port: port
   loglevel: "list(none|error|warning|info|debug)"

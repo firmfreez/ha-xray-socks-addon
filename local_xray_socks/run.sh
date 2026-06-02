@@ -85,32 +85,36 @@ parse_vless_link() {
 }
 
 LINK="$(bashio::config 'link')"
-SERVER="$(bashio::config 'server')"
-PORT="$(bashio::config 'port')"
-UUID="$(bashio::config 'uuid')"
-SNI="$(bashio::config 'sni')"
-FLOW="$(bashio::config 'flow')"
-FINGERPRINT="$(bashio::config 'fingerprint')"
-ALPN="$(bashio::config 'alpn')"
 SOCKS_PORT="$(bashio::config 'socks_port')"
 LOGLEVEL="$(bashio::config 'loglevel')"
 
-if [ -n "${LINK}" ]; then
-  parse_vless_link "${LINK}"
+SERVER=""
+PORT=""
+UUID=""
+SNI=""
+FLOW=""
+FINGERPRINT=""
+ALPN=""
+
+if [ -z "${LINK}" ]; then
+  bashio::log.fatal "Option 'link' is required"
+  exit 1
 fi
 
+parse_vless_link "${LINK}"
+
 if [ -z "${SERVER}" ]; then
-  bashio::log.fatal "Option 'server' is required"
+  bashio::log.fatal "Option 'link' does not contain a server"
   exit 1
 fi
 
 if [ -z "${UUID}" ]; then
-  bashio::log.fatal "Option 'uuid' is required"
+  bashio::log.fatal "Option 'link' does not contain a UUID"
   exit 1
 fi
 
 if [ -z "${SNI}" ]; then
-  bashio::log.fatal "Option 'sni' is required"
+  bashio::log.fatal "Option 'link' does not contain an SNI and server fallback failed"
   exit 1
 fi
 
