@@ -85,9 +85,9 @@ parse_vless_link() {
 }
 
 LINK="$(bashio::config 'link')"
-SOCKS_PORT="$(bashio::config 'socks_port')"
 LOGLEVEL="$(bashio::config 'loglevel')"
 
+SOCKS_PORT="1080"
 SERVER=""
 PORT=""
 UUID=""

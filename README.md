@@ -21,7 +21,6 @@ After that, install `Local Xray SOCKS`, paste the VLESS link, and start the add-
 ## Add-on Options
 
 - `link`: Full `vless://...` URI
-- `socks_port`: Local SOCKS5 port exposed by the add-on
 - `loglevel`: Xray log level
 
 ## Example
