@@ -210,7 +210,7 @@ jq -n \
           domain: [
             "geosite:geolocation-!cn"
           ],
-          outbound: "proxy"
+          outboundTag: "proxy"
         }
       ]
     },
