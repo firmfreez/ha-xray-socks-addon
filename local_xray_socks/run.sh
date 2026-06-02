@@ -207,6 +207,13 @@ jq -n \
       rules: [
         {
           type: "field",
+          inboundTag: ["socks"],
+          port: 53,
+          network: "udp",
+          outboundTag: "dns_out"
+        },
+        {
+          type: "field",
           domain: [
             "geosite:geolocation-!cn"
           ],
@@ -273,6 +280,14 @@ jq -n \
           }
         },
         tag: "proxy"
+      },
+      {
+        protocol: "freedom",
+        settings: {
+          domainStrategy: "UseIPv4",
+          userLevel: 0
+        },
+        tag: "dns_out"
       },
       {
         protocol: "freedom",

@@ -53,6 +53,17 @@ sni: ""
 
 When the add-on starts, Xray logs are written directly to the add-on log output so you can verify connections from the Home Assistant UI.
 
+## SOCKS5 UDP (DNS) Support
+
+**This add-on now includes proper UDP DNS relay via SOCKS5:**
+
+- **UDP on port 1080**: DNS queries from Keenetic are relayed through the proxy
+- **Automatic DNS routing**: All UDP port 53 traffic is routed to the upstream DNS servers
+- **Transparent to clients**: Keenetic (and any SOCKS5 client) sends DNS queries normally, no special config needed
+- **Clean logs**: DNS queries don't spam the logs thanks to proper routing rules
+
+This is the correct way to handle SOCKS5 + DNS: use dedicated routing for UDP port 53 instead of forcing everything through TCP.
+
 ## Performance Optimizations (Built-in)
 
 This add-on includes tuned defaults for a fast, low-noise SOCKS5 proxy:
