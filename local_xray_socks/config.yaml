@@ -11,9 +11,11 @@ arch:
 
 ports:
   1080/tcp: 1080
+  1080/udp: 1080
 
 ports_description:
   1080/tcp: "SOCKS5 port for Keenetic"
+  1080/udp: "SOCKS5 UDP relay for Keenetic"
 
 options:
   link: ""
