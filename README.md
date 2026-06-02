@@ -29,7 +29,7 @@ After that, install `Local Xray SOCKS`, fill in the VLESS settings, and start th
 - `flow`: Optional VLESS flow, leave empty unless your server requires it
 - `fingerprint`: Optional TLS fingerprint such as `chrome`
 - `alpn`: Optional ALPN list as comma-separated values, for example `h2,http/1.1`
-- `socks_port`: Local SOCKS5 port exposed by the add-on (default: 1080, TCP and UDP)
+- `socks_port`: Local SOCKS5 port exposed by the add-on (default: 1080)
 - `loglevel`: Xray log level (default: `error` for cleaner logs)
   - Use `error` or `warning` for production
   - Use `info` or `debug` only for troubleshooting

@@ -221,7 +221,7 @@ jq -n \
         protocol: "socks",
         settings: {
           auth: "noauth",
-          udp: true,
+          udp: false,
           userLevel: 0
         },
         sniffing: {
