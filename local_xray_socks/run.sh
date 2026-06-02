@@ -136,11 +136,6 @@ ALPN="$(bashio::config 'alpn')"
 SOCKS_PORT="$(bashio::config 'socks_port')"
 LOGLEVEL="$(bashio::config 'loglevel')"
 
-# Default to conservative logging to avoid I/O/CPU overhead from noisy info messages
-if [ -z "${LOGLEVEL}" ]; then
-  LOGLEVEL="warning"
-fi
-
 if [ -z "${LINK}" ] && [ -n "${SUBSCRIPTION_URL}" ]; then
   LINK="$(fetch_subscription_link "${SUBSCRIPTION_URL}")"
 fi
@@ -212,6 +207,13 @@ jq -n \
       rules: [
         {
           type: "field",
+          inboundTag: ["socks"],
+          port: 53,
+          network: "udp",
+          outboundTag: "dns_out"
+        },
+        {
+          type: "field",
           domain: [
             "geosite:geolocation-!cn"
           ],
@@ -226,11 +228,11 @@ jq -n \
         protocol: "socks",
         settings: {
           auth: "noauth",
-          udp: false,
+          udp: true,
           userLevel: 0
         },
         sniffing: {
-          enabled: false,
+          enabled: true,
           destOverride: ["http", "tls", "quic"],
           metadataOnly: false,
           routeOnly: false
@@ -240,8 +242,8 @@ jq -n \
             tcpFastOpen: true,
             tcpNoDelay: true,
             tcpCongestion: "bbr",
-            receiveBufferSize: 4194304,
-            sendBufferSize: 4194304,
+            receiveBufferSize: 8388608,
+            sendBufferSize: 8388608,
             mark: 255,
             tcpMaxSegSize: 1460
           }
@@ -272,12 +274,20 @@ jq -n \
             tcpKeepAliveInterval: 30,
             tcpUserTimeout: 30000,
             tcpMaxSegSize: 1460,
-            receiveBufferSize: 4194304,
-            sendBufferSize: 4194304,
+            receiveBufferSize: 8388608,
+            sendBufferSize: 8388608,
             mark: 255
           }
         },
         tag: "proxy"
+      },
+      {
+        protocol: "freedom",
+        settings: {
+          domainStrategy: "UseIPv4",
+          userLevel: 0
+        },
+        tag: "dns_out"
       },
       {
         protocol: "freedom",
@@ -299,10 +309,10 @@ jq -n \
           downlinkOnly: 0,
           statsUserUplink: false,
           statsUserDownlink: false,
-          bufferSize: 32768,
+          bufferSize: 65536,
           connIdle: 600,
-          downConns: 500,
-          upConns: 500
+          downConns: 1000,
+          upConns: 1000
         }
       },
       system: {
