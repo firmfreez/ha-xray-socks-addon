@@ -105,9 +105,22 @@ parse_amneziawg_config() {
   local config="$1"
   local parsed_file key value section
 
+  if [ -z "${config}" ] && [[ "${LINK}" == \[* ]]; then
+    config="${LINK}"
+  fi
+
   if [ -z "${config}" ]; then
     bashio::log.fatal "Option 'amneziawg_config' is required when protocol=amneziawg"
     exit 1
+  fi
+
+  if [[ "${config}" == vpn://* ]] || [[ "${LINK}" == vpn://* ]]; then
+    bashio::log.fatal "Amnezia vpn:// links are not supported yet. Paste the full [Interface]/[Peer] config into 'amneziawg_config'"
+    exit 1
+  fi
+
+  if [[ "${config}" != *$'\n'* && "${config}" == *'\\n'* ]]; then
+    config="$(printf '%b' "${config}")"
   fi
 
   mkdir -p /tmp/amneziawg

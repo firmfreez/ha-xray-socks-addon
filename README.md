@@ -58,4 +58,21 @@ AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
 ```
 
+In YAML mode, use a block scalar so Home Assistant keeps line breaks:
+
+```yaml
+protocol: amneziawg
+link: ""
+amneziawg_config: |
+  [Interface]
+  PrivateKey = CLIENT_PRIVATE_KEY
+  Address = 10.0.0.2/32
+
+  [Peer]
+  PublicKey = SERVER_PUBLIC_KEY
+  Endpoint = example.com:51820
+  AllowedIPs = 0.0.0.0/0, ::/0
+loglevel: info
+```
+
 When the add-on starts, Xray logs are written directly to the add-on log output so you can verify connections from the Home Assistant UI.
