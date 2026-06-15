@@ -296,6 +296,23 @@ log_amneziawg_state() {
   ip -6 route show || true
 }
 
+wait_for_amneziawg_handshake() {
+  local i latest_handshake transfer_line
+
+  for i in $(seq 1 20); do
+    latest_handshake="$(awg show awg0 latest-handshakes 2>/dev/null | awk '{ print $2; exit }' || true)"
+    if [ -n "${latest_handshake}" ] && [ "${latest_handshake}" != "0" ]; then
+      bashio::log.info "AmneziaWG handshake established"
+      return
+    fi
+    sleep 1
+  done
+
+  transfer_line="$(awg show awg0 transfer 2>/dev/null | awk '{ print "received=" $2 ", sent=" $3; exit }' || true)"
+  bashio::log.warning "AmneziaWG handshake was not established after 20 seconds (${transfer_line:-no transfer stats})"
+  bashio::log.warning "Check that the endpoint UDP port is reachable and that PrivateKey/PublicKey/PresharedKey/AmneziaWG parameters match the server"
+}
+
 write_amneziawg_interface_config() {
   {
     printf '[Interface]\n'
@@ -397,6 +414,7 @@ setup_amneziawg() {
   done < <(split_csv "${AWG_ALLOWED_IPS}")
 
   bashio::log.info "Started AmneziaWG target ${AWG_ENDPOINT_HOST}:${AWG_ENDPOINT_PORT} on awg0"
+  wait_for_amneziawg_handshake
   log_amneziawg_state
 }
 
