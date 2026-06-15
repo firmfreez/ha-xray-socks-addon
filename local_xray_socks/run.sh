@@ -282,7 +282,7 @@ create_amneziawg_interface() {
   fi
 
   bashio::log.info "Native AmneziaWG interface is unavailable, falling back to amneziawg-go"
-  amneziawg-go awg0
+  WG_PROCESS_FOREGROUND=1 LOG_LEVEL="${LOGLEVEL}" amneziawg-go awg0 &
 }
 
 log_amneziawg_state() {
