@@ -103,9 +103,9 @@ split_csv() {
 
 parse_amneziawg_config() {
   local config="$1"
-  local parsed_file key value section
+  local parsed_file key value section received_preview
 
-  if [ -z "${config}" ] && [[ "${LINK}" == \[* ]]; then
+  if [[ "${config}" != *"[Interface]"* && "${LINK}" == *"[Interface]"* ]]; then
     config="${LINK}"
   fi
 
@@ -123,8 +123,26 @@ parse_amneziawg_config() {
     config="$(printf '%b' "${config}")"
   fi
 
+  if [[ "${config}" != *"[Interface]"* && "${LINK}" == *'\\n'* ]]; then
+    LINK="$(printf '%b' "${LINK}")"
+    if [[ "${LINK}" == *"[Interface]"* ]]; then
+      config="${LINK}"
+    fi
+  fi
+
   mkdir -p /tmp/amneziawg
-  printf '%s\n' "${config}" > /tmp/amneziawg/client.conf
+  printf '%s\n' "${config}" | awk '
+    /^\047?[[:space:]]*\[Interface\][[:space:]]*\047?$/ { found=1 }
+    found {
+      gsub(/^\047|^\042|\047$|\042$/, "")
+      print
+    }
+  ' > /tmp/amneziawg/client.conf
+
+  if [ ! -s /tmp/amneziawg/client.conf ]; then
+    printf '%s\n' "${config}" > /tmp/amneziawg/client.conf
+  fi
+
   parsed_file="/tmp/amneziawg/parsed.tsv"
 
   awk '
@@ -179,6 +197,22 @@ parse_amneziawg_config() {
   done < "${parsed_file}"
 
   if [ -z "${AWG_PRIVATE_KEY}" ]; then
+    received_preview="$(awk '
+      BEGIN { count=0 }
+      count < 8 {
+        line=$0
+        pos=index(line, "=")
+        if (pos > 0) {
+          key=substr(line, 1, pos - 1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+          print key " = ..."
+        } else if (length(line) > 0) {
+          print line
+        }
+        count++
+      }
+    ' /tmp/amneziawg/client.conf | tr "\n" " " | cut -c1-240)"
+    bashio::log.warning "Received AmneziaWG config preview: ${received_preview}"
     bashio::log.fatal "Option 'amneziawg_config' does not contain Interface.PrivateKey"
     exit 1
   fi
