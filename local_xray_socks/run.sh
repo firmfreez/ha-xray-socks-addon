@@ -271,6 +271,31 @@ route_endpoint_via_original_default() {
   fi
 }
 
+create_amneziawg_interface() {
+  if ip link show awg0 >/dev/null 2>&1; then
+    ip link delete awg0 || true
+  fi
+
+  if ip link add dev awg0 type amneziawg >/tmp/amneziawg/ip-link-add.log 2>&1; then
+    bashio::log.info "Created native AmneziaWG kernel interface awg0"
+    return
+  fi
+
+  bashio::log.info "Native AmneziaWG interface is unavailable, falling back to amneziawg-go"
+  amneziawg-go awg0
+}
+
+log_amneziawg_state() {
+  bashio::log.info "AmneziaWG interface state:"
+  ip address show dev awg0 || true
+  bashio::log.info "AmneziaWG peer state:"
+  awg show awg0 || true
+  bashio::log.info "IPv4 routes:"
+  ip route show || true
+  bashio::log.info "IPv6 routes:"
+  ip -6 route show || true
+}
+
 write_amneziawg_interface_config() {
   {
     printf '[Interface]\n'
@@ -336,7 +361,7 @@ setup_amneziawg() {
   original_dev="$(awk '{ for (i=1; i<=NF; i++) if ($i == "dev") print $(i+1) }' <<< "${original_default}")"
 
   write_amneziawg_interface_config
-  amneziawg-go awg0
+  create_amneziawg_interface
 
   for i in $(seq 1 20); do
     if ip link show awg0 >/dev/null 2>&1; then
@@ -372,6 +397,7 @@ setup_amneziawg() {
   done < <(split_csv "${AWG_ALLOWED_IPS}")
 
   bashio::log.info "Started AmneziaWG target ${AWG_ENDPOINT_HOST}:${AWG_ENDPOINT_PORT} on awg0"
+  log_amneziawg_state
 }
 
 write_socks_direct_xray_config() {
