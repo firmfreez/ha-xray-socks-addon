@@ -292,8 +292,16 @@ log_amneziawg_state() {
   awg show awg0 || true
   bashio::log.info "IPv4 routes:"
   ip route show || true
+  bashio::log.info "IPv4 AWG policy routes:"
+  ip route show table 51820 || true
+  bashio::log.info "IPv4 rules:"
+  ip rule show || true
   bashio::log.info "IPv6 routes:"
   ip -6 route show || true
+  bashio::log.info "IPv6 AWG policy routes:"
+  ip -6 route show table 51820 || true
+  bashio::log.info "IPv6 rules:"
+  ip -6 rule show || true
 }
 
 wait_for_amneziawg_handshake() {
@@ -360,7 +368,7 @@ parse_endpoint() {
 }
 
 setup_amneziawg() {
-  local i address allowed_ip original_default original_gateway original_dev endpoint_ip
+  local i address address_ip allowed_ip original_default original_gateway original_dev endpoint_ip
 
   parse_endpoint
   if [ -z "${AWG_ENDPOINT_HOST}" ] || [ -z "${AWG_ENDPOINT_PORT}" ] || [ "${AWG_ENDPOINT_HOST}" = "${AWG_ENDPOINT_PORT}" ]; then
@@ -397,6 +405,12 @@ setup_amneziawg() {
   while IFS= read -r address; do
     [ -n "${address}" ] || continue
     ip address add "${address}" dev awg0
+    address_ip="${address%%/*}"
+    if [[ "${address_ip}" == *:* ]]; then
+      AWG_SEND_THROUGH_V6="${address_ip}"
+    elif [ -z "${AWG_SEND_THROUGH}" ]; then
+      AWG_SEND_THROUGH="${address_ip}"
+    fi
   done < <(split_csv "${AWG_ADDRESS}")
 
   ip link set mtu "${AWG_MTU}" dev awg0
@@ -407,11 +421,18 @@ setup_amneziawg() {
   while IFS= read -r allowed_ip; do
     [ -n "${allowed_ip}" ] || continue
     case "${allowed_ip}" in
-      0.0.0.0/0) ip route replace default dev awg0 ;;
-      ::/0) ip -6 route replace default dev awg0 || true ;;
-      *) ip route replace "${allowed_ip}" dev awg0 || ip -6 route replace "${allowed_ip}" dev awg0 || true ;;
+      0.0.0.0/0) ip route replace default dev awg0 table 51820 ;;
+      ::/0) ip -6 route replace default dev awg0 table 51820 || true ;;
+      *) ip route replace "${allowed_ip}" dev awg0 table 51820 || ip -6 route replace "${allowed_ip}" dev awg0 table 51820 || true ;;
     esac
   done < <(split_csv "${AWG_ALLOWED_IPS}")
+
+  if [ -n "${AWG_SEND_THROUGH}" ]; then
+    ip rule add from "${AWG_SEND_THROUGH}" table 51820 priority 10000 2>/dev/null || true
+  fi
+  if [ -n "${AWG_SEND_THROUGH_V6}" ]; then
+    ip -6 rule add from "${AWG_SEND_THROUGH_V6}" table 51820 priority 10000 2>/dev/null || true
+  fi
 
   bashio::log.info "Started AmneziaWG target ${AWG_ENDPOINT_HOST}:${AWG_ENDPOINT_PORT} on awg0"
   wait_for_amneziawg_handshake
@@ -424,6 +445,7 @@ write_socks_direct_xray_config() {
   jq -n \
     --argjson socks_port "$SOCKS_PORT" \
     --arg loglevel "$LOGLEVEL" \
+    --arg send_through "$AWG_SEND_THROUGH" \
     '{
       log: {
         loglevel: $loglevel,
@@ -449,7 +471,8 @@ write_socks_direct_xray_config() {
         {
           protocol: "freedom",
           tag: "proxy"
-        },
+        }
+        + (if $send_through == "" then {} else {sendThrough: $send_through} end),
         {
           protocol: "blackhole",
           tag: "block"
@@ -498,6 +521,8 @@ AWG_ALLOWED_IPS=""
 AWG_KEEPALIVE=""
 AWG_ENDPOINT_HOST=""
 AWG_ENDPOINT_PORT=""
+AWG_SEND_THROUGH=""
+AWG_SEND_THROUGH_V6=""
 
 case "${PROTOCOL}" in
   vless)
