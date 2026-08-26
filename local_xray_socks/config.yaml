@@ -1,5 +1,5 @@
 name: "Local Xray SOCKS"
-version: "0.3.6"
+version: "0.5.0"
 slug: "local_xray_socks"
 description: "Xray client that exposes a local SOCKS5 proxy for Keenetic"
 url: "https://github.com/firmfreez/ha-xray-socks-addon"
@@ -20,13 +20,21 @@ ports_description:
 options:
   protocol: "vless"
   link: ""
+  amneziawg_profile: "1"
   amneziawg_config: ""
+  amneziawg_config_2: ""
+  amneziawg_config_3: ""
+  amneziawg_config_4: ""
   loglevel: "warning"
 
 schema:
   protocol: "list(vless|amneziawg)"
   link: str
+  amneziawg_profile: "list(1|2|3|4)"
   amneziawg_config: str
+  amneziawg_config_2: str
+  amneziawg_config_3: str
+  amneziawg_config_4: str
   loglevel: "list(none|error|warning|info|debug)"
 
 privileged:

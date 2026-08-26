@@ -110,7 +110,7 @@ parse_amneziawg_config() {
   fi
 
   if [ -z "${config}" ]; then
-    bashio::log.fatal "Option 'amneziawg_config' is required when protocol=amneziawg"
+    bashio::log.fatal "AmneziaWG profile ${AMNEZIAWG_PROFILE} is empty"
     exit 1
   fi
 
@@ -188,6 +188,15 @@ parse_amneziawg_config() {
       interface:i3) AWG_I3="${value}" ;;
       interface:i4) AWG_I4="${value}" ;;
       interface:i5) AWG_I5="${value}" ;;
+      interface:headerprotectionkey) AWG_HEADER_PROTECTION_KEY="${value}" ;;
+      interface:contentpaddingaddition) AWG_CONTENT_PADDING_ADDITION="${value}" ;;
+      interface:rekeyaftertime) AWG_REKEY_AFTER_TIME="${value}" ;;
+      interface:rekeytimeout) AWG_REKEY_TIMEOUT="${value}" ;;
+      interface:rejectaftertime) AWG_REJECT_AFTER_TIME="${value}" ;;
+      interface:keepalivetimeout) AWG_KEEPALIVE_TIMEOUT="${value}" ;;
+      interface:maxhandshakeattempts) AWG_MAX_HANDSHAKE_ATTEMPTS="${value}" ;;
+      interface:randomtrailers) AWG_RANDOM_TRAILERS="${value}" ;;
+      interface:disablecookies) AWG_DISABLE_COOKIES="${value}" ;;
       peer:publickey) AWG_PUBLIC_KEY="${value}" ;;
       peer:presharedkey) AWG_PRESHARED_KEY="${value}" ;;
       peer:endpoint) AWG_ENDPOINT="${value}" ;;
@@ -234,6 +243,37 @@ parse_amneziawg_config() {
   if [ -z "${AWG_MTU}" ]; then
     AWG_MTU="1280"
   fi
+
+  validate_amneziawg_31_config
+}
+
+validate_awg_bool() {
+  local key="$1"
+  local value="$2"
+
+  case "${value,,}" in
+    ""|on|off|0|1) ;;
+    *)
+      bashio::log.fatal "AmneziaWG option '${key}' must be on, off, 0, or 1"
+      exit 1
+      ;;
+  esac
+}
+
+validate_amneziawg_31_config() {
+  local padding
+
+  validate_awg_bool "RandomTrailers" "${AWG_RANDOM_TRAILERS}"
+  validate_awg_bool "DisableCookies" "${AWG_DISABLE_COOKIES}"
+
+  if [ -n "${AWG_HEADER_PROTECTION_KEY}" ]; then
+    for padding in "${AWG_S1}" "${AWG_S2}" "${AWG_S3}" "${AWG_S4}"; do
+      if ! [[ "${padding}" =~ ^[0-9]+$ ]] || [ "${padding}" -lt 12 ]; then
+        bashio::log.fatal "HeaderProtectionKey requires numeric S1-S4 values of at least 12"
+        exit 1
+      fi
+    done
+  fi
 }
 
 append_awg_option() {
@@ -276,13 +316,11 @@ create_amneziawg_interface() {
     ip link delete awg0 || true
   fi
 
-  if ip link add dev awg0 type amneziawg >/tmp/amneziawg/ip-link-add.log 2>&1; then
-    bashio::log.info "Created native AmneziaWG kernel interface awg0"
-    return
-  fi
-
-  bashio::log.info "Native AmneziaWG interface is unavailable, falling back to amneziawg-go"
-  WG_PROCESS_FOREGROUND=1 LOG_LEVEL="${LOGLEVEL}" amneziawg-go awg0 &
+  # The Home Assistant host may expose an older kernel module which can create
+  # an interface but cannot apply AWG 3.1 parameters. Always use the versioned
+  # userspace engine shipped in this image.
+  bashio::log.info "Creating AmneziaWG 3.1 userspace interface awg0"
+  LOG_LEVEL="${LOGLEVEL}" amneziawg-go --foreground awg0 &
 }
 
 log_amneziawg_state() {
@@ -344,6 +382,15 @@ write_amneziawg_interface_config() {
   append_awg_option "I3" "${AWG_I3}"
   append_awg_option "I4" "${AWG_I4}"
   append_awg_option "I5" "${AWG_I5}"
+  append_awg_option "HeaderProtectionKey" "${AWG_HEADER_PROTECTION_KEY}"
+  append_awg_option "ContentPaddingAddition" "${AWG_CONTENT_PADDING_ADDITION}"
+  append_awg_option "RekeyAfterTime" "${AWG_REKEY_AFTER_TIME}"
+  append_awg_option "RekeyTimeout" "${AWG_REKEY_TIMEOUT}"
+  append_awg_option "RejectAfterTime" "${AWG_REJECT_AFTER_TIME}"
+  append_awg_option "KeepaliveTimeout" "${AWG_KEEPALIVE_TIMEOUT}"
+  append_awg_option "MaxHandshakeAttempts" "${AWG_MAX_HANDSHAKE_ATTEMPTS}"
+  append_awg_option "RandomTrailers" "${AWG_RANDOM_TRAILERS}"
+  append_awg_option "DisableCookies" "${AWG_DISABLE_COOKIES}"
 
   {
     printf '\n[Peer]\n'
@@ -481,9 +528,25 @@ write_socks_direct_xray_config() {
     }' > /usr/local/etc/xray/config.json
 }
 
+select_amneziawg_config() {
+  case "${AMNEZIAWG_PROFILE}" in
+    1) AMNEZIAWG_CONFIG="$(bashio::config 'amneziawg_config')" ;;
+    2) AMNEZIAWG_CONFIG="$(bashio::config 'amneziawg_config_2')" ;;
+    3) AMNEZIAWG_CONFIG="$(bashio::config 'amneziawg_config_3')" ;;
+    4) AMNEZIAWG_CONFIG="$(bashio::config 'amneziawg_config_4')" ;;
+    *)
+      bashio::log.fatal "Option 'amneziawg_profile' must be 1, 2, 3, or 4"
+      exit 1
+      ;;
+  esac
+
+  bashio::log.info "Selected AmneziaWG profile ${AMNEZIAWG_PROFILE}"
+}
+
 LINK="$(bashio::config 'link')"
 PROTOCOL="$(bashio::config 'protocol')"
-AMNEZIAWG_CONFIG="$(bashio::config 'amneziawg_config')"
+AMNEZIAWG_PROFILE="$(bashio::config 'amneziawg_profile')"
+AMNEZIAWG_CONFIG=""
 LOGLEVEL="$(bashio::config 'loglevel')"
 
 SOCKS_PORT="1080"
@@ -514,6 +577,15 @@ AWG_I2=""
 AWG_I3=""
 AWG_I4=""
 AWG_I5=""
+AWG_HEADER_PROTECTION_KEY=""
+AWG_CONTENT_PADDING_ADDITION=""
+AWG_REKEY_AFTER_TIME=""
+AWG_REKEY_TIMEOUT=""
+AWG_REJECT_AFTER_TIME=""
+AWG_KEEPALIVE_TIMEOUT=""
+AWG_MAX_HANDSHAKE_ATTEMPTS=""
+AWG_RANDOM_TRAILERS=""
+AWG_DISABLE_COOKIES=""
 AWG_PUBLIC_KEY=""
 AWG_PRESHARED_KEY=""
 AWG_ENDPOINT=""
@@ -640,6 +712,7 @@ case "${PROTOCOL}" in
     fi
     ;;
   amneziawg)
+    select_amneziawg_config
     parse_amneziawg_config "${AMNEZIAWG_CONFIG}"
     setup_amneziawg
     write_socks_direct_xray_config

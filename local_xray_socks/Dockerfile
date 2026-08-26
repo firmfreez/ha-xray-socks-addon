@@ -11,8 +11,11 @@ LABEL \
 
 RUN apk add --no-cache curl unzip jq bash iproute2 openresolv
 
-ARG AMNEZIAWG_GO_VERSION="master"
-ARG AMNEZIAWG_TOOLS_VERSION="v1.0.20260223"
+# Keep the engine and its userspace configuration tools on compatible AWG 3.1
+# revisions. The tools project did not publish an AWG 3.1 tag yet, so pin the
+# exact upstream commit instead of using a moving branch.
+ARG AMNEZIAWG_GO_VERSION="v3.1.20260814"
+ARG AMNEZIAWG_TOOLS_VERSION="ee0f0a9aa34ff0a0da4b3433b9512781cfe02843"
 
 RUN apk add --no-cache --virtual .build-deps build-base go linux-headers make \
     && curl -L "https://github.com/amnezia-vpn/amneziawg-go/archive/${AMNEZIAWG_GO_VERSION}.tar.gz" -o /tmp/amneziawg-go.tar.gz \

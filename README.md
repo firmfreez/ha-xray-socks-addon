@@ -22,7 +22,9 @@ After that, install `Local Xray SOCKS`, choose the protocol, paste the matching 
 
 - `protocol`: `vless` or `amneziawg`
 - `link`: Full `vless://...` URI. Used when `protocol` is `vless`.
-- `amneziawg_config`: Full AmneziaWG/WireGuard-style client config. Used when `protocol` is `amneziawg`.
+- `amneziawg_profile`: Active AmneziaWG configuration slot, from `1` to `4`.
+- `amneziawg_config`: Full AmneziaWG/WireGuard-style client config for profile 1.
+- `amneziawg_config_2`, `amneziawg_config_3`, `amneziawg_config_4`: Additional AmneziaWG configuration profiles.
 - `loglevel`: Xray log level
 
 ## VLESS Example
@@ -33,7 +35,9 @@ You can paste a full VLESS link like:
 
 ## AmneziaWG Example
 
-Set `protocol` to `amneziawg` and paste the client config into `amneziawg_config`:
+Set `protocol` to `amneziawg`, select `amneziawg_profile`, and paste the client
+config into the corresponding configuration slot. Profile 1 uses the original
+`amneziawg_config` option for backward compatibility.
 
 ```ini
 [Interface]
@@ -43,12 +47,23 @@ MTU = 1280
 Jc = 5
 Jmin = 50
 Jmax = 1000
-S1 = 0
-S2 = 0
+S1 = 76
+S2 = 47
+S3 = 33
+S4 = 12
 H1 = 1-4294967295
 H2 = 1-4294967295
 H3 = 1-4294967295
 H4 = 1-4294967295
+HeaderProtectionKey = SHARED_HEADER_PROTECTION_KEY
+ContentPaddingAddition = 10-100
+RandomTrailers = on
+DisableCookies = on
+RekeyAfterTime = 120-180
+RekeyTimeout = 5-10
+RejectAfterTime = 180-240
+KeepaliveTimeout = 10-20
+MaxHandshakeAttempts = 20
 
 [Peer]
 PublicKey = SERVER_PUBLIC_KEY
@@ -58,11 +73,17 @@ AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
 ```
 
+AmneziaWG 3.1 configurations are supported, including header protection,
+content padding, randomized handshake trailers, disabled cookies, and custom
+timing ranges. When `HeaderProtectionKey` is present, all `S1`-`S4` values must
+be at least 12 as required by the AmneziaWG engine.
+
 In YAML mode, use a block scalar so Home Assistant keeps line breaks:
 
 ```yaml
 protocol: amneziawg
 link: ""
+amneziawg_profile: "1"
 amneziawg_config: |
   [Interface]
   PrivateKey = CLIENT_PRIVATE_KEY
@@ -72,7 +93,13 @@ amneziawg_config: |
   PublicKey = SERVER_PUBLIC_KEY
   Endpoint = example.com:51820
   AllowedIPs = 0.0.0.0/0, ::/0
+amneziawg_config_2: ""
+amneziawg_config_3: ""
+amneziawg_config_4: ""
 loglevel: info
 ```
+
+To switch servers, change only `amneziawg_profile` to `1`, `2`, `3`, or `4`
+and restart the add-on. The other saved configurations remain unchanged.
 
 When the add-on starts, Xray logs are written directly to the add-on log output so you can verify connections from the Home Assistant UI.
