@@ -245,6 +245,7 @@ parse_amneziawg_config() {
   fi
 
   validate_amneziawg_31_config
+  detect_amneziawg_config_version
 }
 
 validate_awg_bool() {
@@ -274,6 +275,29 @@ validate_amneziawg_31_config() {
       fi
     done
   fi
+}
+
+detect_amneziawg_config_version() {
+  if [ -n "${AWG_RANDOM_TRAILERS}" ] || [ -n "${AWG_DISABLE_COOKIES}" ]; then
+    AWG_CONFIG_VERSION="3.1"
+    bashio::log.info "AmneziaWG protocol profile: 3.1 (RandomTrailers=${AWG_RANDOM_TRAILERS:-not set}, DisableCookies=${AWG_DISABLE_COOKIES:-not set})"
+    return
+  fi
+
+  if [ -n "${AWG_HEADER_PROTECTION_KEY}" ] \
+    || [ -n "${AWG_CONTENT_PADDING_ADDITION}" ] \
+    || [ -n "${AWG_REKEY_AFTER_TIME}" ] \
+    || [ -n "${AWG_REKEY_TIMEOUT}" ] \
+    || [ -n "${AWG_REJECT_AFTER_TIME}" ] \
+    || [ -n "${AWG_KEEPALIVE_TIMEOUT}" ] \
+    || [ -n "${AWG_MAX_HANDSHAKE_ATTEMPTS}" ]; then
+    AWG_CONFIG_VERSION="3.0"
+    bashio::log.info "AmneziaWG protocol profile: 3.0 (AWG 3 parameters present, 3.1 parameters absent)"
+    return
+  fi
+
+  AWG_CONFIG_VERSION="legacy"
+  bashio::log.info "AmneziaWG protocol profile: legacy 1.x/2.x (no AWG 3.x parameters)"
 }
 
 append_awg_option() {
@@ -312,6 +336,8 @@ route_endpoint_via_original_default() {
 }
 
 create_amneziawg_interface() {
+  local engine_version
+
   if ip link show awg0 >/dev/null 2>&1; then
     ip link delete awg0 || true
   fi
@@ -319,7 +345,9 @@ create_amneziawg_interface() {
   # The Home Assistant host may expose an older kernel module which can create
   # an interface but cannot apply AWG 3.1 parameters. Always use the versioned
   # userspace engine shipped in this image.
-  bashio::log.info "Creating AmneziaWG 3.1 userspace interface awg0"
+  engine_version="$(amneziawg-go --version 2>/dev/null | head -n 1 || true)"
+  bashio::log.info "AmneziaWG engine: ${engine_version:-version unavailable}"
+  bashio::log.info "Creating AmneziaWG userspace interface awg0 for protocol profile ${AWG_CONFIG_VERSION}"
   LOG_LEVEL="${LOGLEVEL}" amneziawg-go --foreground awg0 &
 }
 
@@ -586,6 +614,7 @@ AWG_KEEPALIVE_TIMEOUT=""
 AWG_MAX_HANDSHAKE_ATTEMPTS=""
 AWG_RANDOM_TRAILERS=""
 AWG_DISABLE_COOKIES=""
+AWG_CONFIG_VERSION="unknown"
 AWG_PUBLIC_KEY=""
 AWG_PRESHARED_KEY=""
 AWG_ENDPOINT=""

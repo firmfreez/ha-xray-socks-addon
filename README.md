@@ -102,4 +102,10 @@ loglevel: info
 To switch servers, change only `amneziawg_profile` to `1`, `2`, `3`, or `4`
 and restart the add-on. The other saved configurations remain unchanged.
 
+At startup, the add-on logs both the bundled engine version and the detected
+protocol profile. A configuration containing `RandomTrailers` or
+`DisableCookies` is reported as `3.1`; configurations with other AWG 3
+parameters are reported as `3.0`; older configurations are reported as
+`legacy 1.x/2.x`. No private or shared keys are included in these messages.
+
 When the add-on starts, Xray logs are written directly to the add-on log output so you can verify connections from the Home Assistant UI.
