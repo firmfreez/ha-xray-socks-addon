@@ -42,6 +42,7 @@ RUN curl -L "${XRAY_ZIP_URL}" -o /tmp/xray.zip \
     && rm -rf /tmp/xray /tmp/xray.zip
 
 COPY run.sh /run.sh
+COPY supervise.sh /supervise.sh
 RUN chmod a+x /run.sh
 
 CMD [ "/run.sh" ]

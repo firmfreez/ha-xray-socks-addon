@@ -1,5 +1,11 @@
 #!/usr/bin/with-contenv bashio
 set -euo pipefail
+umask 077
+source /supervise.sh
+XRAY_PID=""
+AWG_PID=""
+trap cleanup_runtime EXIT
+trap 'exit 0' TERM INT
 
 urldecode() {
   local value="${1//+/ }"
@@ -243,6 +249,10 @@ parse_amneziawg_config() {
   if [ -z "${AWG_MTU}" ]; then
     AWG_MTU="1280"
   fi
+  # Preserve an explicit zero (disabled), but keep NAT mappings alive by default.
+  if [ -z "${AWG_KEEPALIVE}" ]; then
+    AWG_KEEPALIVE="25"
+  fi
 
   validate_amneziawg_31_config
   detect_amneziawg_config_version
@@ -349,6 +359,7 @@ create_amneziawg_interface() {
   bashio::log.info "AmneziaWG engine: ${engine_version:-version unavailable}"
   bashio::log.info "Creating AmneziaWG userspace interface awg0 for protocol profile ${AWG_CONFIG_VERSION}"
   LOG_LEVEL="${LOGLEVEL}" amneziawg-go --foreground awg0 &
+  AWG_PID=$!
 }
 
 log_amneziawg_state() {
@@ -456,7 +467,13 @@ setup_amneziawg() {
     endpoint_ip="${AWG_ENDPOINT_HOST}"
   fi
 
-  original_default="$(ip route show default | head -n 1 || true)"
+  if [[ "${endpoint_ip}" == *:* ]]; then
+    original_default="$(ip -6 route show default | head -n 1 || true)"
+    AWG_ENDPOINT="[${endpoint_ip}]:${AWG_ENDPOINT_PORT}"
+  else
+    original_default="$(ip route show default | head -n 1 || true)"
+    AWG_ENDPOINT="${endpoint_ip}:${AWG_ENDPOINT_PORT}"
+  fi
   original_gateway="$(awk '{ for (i=1; i<=NF; i++) if ($i == "via") print $(i+1) }' <<< "${original_default}")"
   original_dev="$(awk '{ for (i=1; i<=NF; i++) if ($i == "dev") print $(i+1) }' <<< "${original_default}")"
 
@@ -576,6 +593,11 @@ PROTOCOL="$(bashio::config 'protocol')"
 AMNEZIAWG_PROFILE="$(bashio::config 'amneziawg_profile')"
 AMNEZIAWG_CONFIG=""
 LOGLEVEL="$(bashio::config 'loglevel')"
+WATCHDOG_ENABLED="$(bashio::config 'watchdog_enabled')"
+WATCHDOG_URLS="$(bashio::config 'watchdog_urls')"
+if [ -z "${WATCHDOG_URLS}" ] || [ "${WATCHDOG_URLS}" = "null" ]; then
+  WATCHDOG_URLS="https://www.cloudflare.com/cdn-cgi/trace,https://www.google.com/generate_204"
+fi
 
 SOCKS_PORT="1080"
 SERVER=""
@@ -753,8 +775,11 @@ case "${PROTOCOL}" in
 esac
 
 bashio::log.info "Starting Xray on SOCKS5 port ${SOCKS_PORT}"
-if [ "${LOGLEVEL}" = "debug" ]; then
-  bashio::log.info "Generated Xray config:"
-  cat /usr/local/etc/xray/config.json
-fi
-exec /usr/local/bin/xray run -config /usr/local/etc/xray/config.json
+/usr/local/bin/xray run -test -config /usr/local/etc/xray/config.json
+/usr/local/bin/xray run -config /usr/local/etc/xray/config.json &
+XRAY_PID=$!
+supervise_runtime
+bashio::log.warning "Restarting VPN processes in 30 seconds"
+cleanup_runtime
+sleep 30
+exec /run.sh

@@ -1,11 +1,12 @@
 name: "Local Xray SOCKS"
-version: "0.5.1"
+version: "0.5.2"
 slug: "local_xray_socks"
 description: "Xray client that exposes a local SOCKS5 proxy for Keenetic"
 url: "https://github.com/firmfreez/ha-xray-socks-addon"
 startup: services
 boot: auto
 init: false
+watchdog: "tcp://[HOST]:[PORT:1080]"
 arch:
   - aarch64
 
@@ -26,6 +27,8 @@ options:
   amneziawg_config_3: ""
   amneziawg_config_4: ""
   loglevel: "warning"
+  watchdog_enabled: true
+  watchdog_urls: "https://www.cloudflare.com/cdn-cgi/trace,https://www.google.com/generate_204"
 
 schema:
   protocol: "list(vless|amneziawg)"
@@ -36,6 +39,8 @@ schema:
   amneziawg_config_3: str
   amneziawg_config_4: str
   loglevel: "list(none|error|warning|info|debug)"
+  watchdog_enabled: "bool?"
+  watchdog_urls: "str?"
 
 privileged:
   - NET_ADMIN

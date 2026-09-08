@@ -26,6 +26,25 @@ After that, install `Local Xray SOCKS`, choose the protocol, paste the matching 
 - `amneziawg_config`: Full AmneziaWG/WireGuard-style client config for profile 1.
 - `amneziawg_config_2`, `amneziawg_config_3`, `amneziawg_config_4`: Additional AmneziaWG configuration profiles.
 - `loglevel`: Xray log level
+- `watchdog_enabled`: Check connectivity through SOCKS every 30 seconds (default
+  `true`). After three consecutive failed rounds, restart both VPN processes
+  with a 30-second delay. Process exits are monitored even when this is `false`.
+- `watchdog_urls`: Comma-separated HTTP(S) URLs for connectivity checks. Defaults
+  to Cloudflare trace and Google generate_204. Each request goes through the VPN
+  and has a 10-second timeout; one successful URL makes the round successful.
+  Choose reachable URLs for your network, especially for split-tunnel profiles.
+
+Recovery recreates the AmneziaWG interface and resolves its endpoint again.
+Existing proxy connections are interrupted and clients must reconnect. During
+an upstream outage, recovery repeats until connectivity returns. The Home
+Assistant Watchdog switch additionally monitors the SOCKS listening port and
+can restart the add-on if startup fails.
+
+If an AmneziaWG profile omits `PersistentKeepalive`, the add-on uses 25 seconds
+to keep NAT mappings alive during idle periods. An explicit `0` is preserved.
+Logs report process exits, failed connectivity checks, and AWG handshake/transfer
+counters before recovery. Generated Xray configuration is no longer printed
+at debug level because it contains connection credentials.
 
 ## VLESS Example
 
