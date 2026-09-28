@@ -61,6 +61,18 @@ class ProfileTests(unittest.TestCase):
             with self.subTest(line=line), self.assertRaises(ValueError):
                 ovpn_config(line, set())
 
+    def test_platform_compatibility_options(self):
+        text = 'client\ndev tun\nignore-unknown-option block-outside-dns\nblock-outside-dns\n'
+        normalized = ovpn_config(text, set())
+        self.assertIn('"ignore-unknown-option" "block-outside-dns"', normalized)
+        self.assertIn('"block-outside-dns"', normalized)
+        self.assertIn('"setenv" "opt" "block-outside-dns"',
+                      ovpn_config('client\nsetenv opt block-outside-dns', set()))
+        for text in ('ignore-unknown-option up\nup /tmp/script',
+                     'setenv opt up /tmp/script', 'setenv opt config other.ovpn'):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                ovpn_config(text, set())
+
     def test_upload_validation(self):
         encoded = base64.b64encode(b'certificate').decode()
         p = self.manager.save(dict(self.profile, ovpn='client\nca company.pem', uploads={'company.pem': encoded}))

@@ -1,3 +1,10 @@
+# 0.7.1
+
+- Accept OpenVPN `ignore-unknown-option` and the cross-platform
+  `block-outside-dns` option during import.
+- Support `setenv opt` for allowed optional directives while preserving
+  validation of scripts and file paths.
+
 # 0.7.0
 
 - Hide obsolete Home Assistant options; manage connections in VPN Manager.

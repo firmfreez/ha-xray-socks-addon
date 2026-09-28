@@ -20,7 +20,7 @@ connect-retry connect-retry-max server-poll-timeout explicit-exit-notify ping
 ping-restart ping-timer-rem mute mute-replay-warnings verb route route-ipv6
 route-metric route-delay route-nopull pull pull-filter redirect-gateway
 redirect-private dhcp-option tun-mtu mssfix sndbuf rcvbuf fast-io float
-allow-compression compress comp-lzo auth-token-user'''.split())
+allow-compression compress comp-lzo auth-token-user ignore-unknown-option block-outside-dns'''.split())
 
 
 def filename(value):
@@ -51,6 +51,11 @@ def ovpn_config(text, assets):
         args = shlex.split(line, comments=True)
         if not args:
             continue
+        optional = args[:2] == ['setenv', 'opt']
+        if optional:
+            args = args[2:]
+            if not args:
+                raise ValueError('После setenv opt нужна директива OpenVPN')
         key = args[0].removeprefix('--')
         if key not in ALLOWED:
             raise ValueError(f'Директива OpenVPN не разрешена: {key}')
@@ -64,6 +69,8 @@ def ovpn_config(text, assets):
                 raise ValueError(f'Загрузите файл для {key} (имя без каталогов)')
             args[1] = '/run/work-vpn/assets/' + args[1]
         args[0] = key
+        if optional:
+            args = ['setenv', 'opt'] + args
         # OpenVPN supports double-quoted tokens, not arbitrary shell syntax.
         output.append(' '.join('"' + a.replace('\\', '\\\\').replace('"', '\\"') + '"' for a in args))
     if block:
