@@ -31,13 +31,6 @@ ARG AMNEZIAWG_GO_VERSION="v3.1.20260814"
 ARG AMNEZIAWG_TOOLS_VERSION="ee0f0a9aa34ff0a0da4b3433b9512781cfe02843"
 
 RUN apk add --no-cache --virtual .build-deps build-base go linux-headers make \
-    && curl -fL --retry 3 https://github.com/rofl0r/microsocks/archive/refs/tags/v1.0.5.tar.gz -o /tmp/microsocks.tar.gz \
-    && echo '939d1851a18a4c03f3cc5c92ff7a50eaf045da7814764b4cb9e26921db15abc8  /tmp/microsocks.tar.gz' | sha256sum -c - \
-    && mkdir -p /tmp/microsocks \
-    && tar -xzf /tmp/microsocks.tar.gz -C /tmp/microsocks --strip-components=1 \
-    && make -C /tmp/microsocks \
-    && install -m 0755 /tmp/microsocks/microsocks /usr/local/bin/microsocks \
-    && rm -rf /tmp/microsocks /tmp/microsocks.tar.gz \
     && curl -L "https://github.com/amnezia-vpn/amneziawg-go/archive/${AMNEZIAWG_GO_VERSION}.tar.gz" -o /tmp/amneziawg-go.tar.gz \
     && mkdir -p /tmp/amneziawg-go \
     && tar -xzf /tmp/amneziawg-go.tar.gz -C /tmp/amneziawg-go --strip-components=1 \
@@ -51,7 +44,7 @@ RUN apk add --no-cache --virtual .build-deps build-base go linux-headers make \
     && apk del .build-deps \
     && rm -rf /tmp/amneziawg-go /tmp/amneziawg-go.tar.gz /tmp/amneziawg-tools /tmp/amneziawg-tools.tar.gz
 
-ARG XRAY_ZIP_URL="https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-arm64-v8a.zip"
+ARG XRAY_ZIP_URL="https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-arm64-v8a.zip"
 
 RUN curl -L "${XRAY_ZIP_URL}" -o /tmp/xray.zip \
     && unzip /tmp/xray.zip -d /tmp/xray \

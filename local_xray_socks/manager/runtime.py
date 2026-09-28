@@ -10,6 +10,7 @@ import shlex
 import socket
 import subprocess
 import threading
+import time
 
 from model import ovpn_config, PERSONAL, personal_options
 
@@ -36,16 +37,22 @@ class Runtime:
         self.stopping = threading.Event()
         self.lock = threading.RLock()
         self.networked = False
+        self.last_probe = None
+        self.probe_lock = threading.Lock()
 
     def start_personal(self, prefix):
         options = self.write('options.json', json.dumps(personal_options(self.p)))
-        self.spawn(prefix + ['env', f'VPN_OPTIONS_FILE={options}',
+        self.spawn(prefix + ['env', 'S6_KEEP_ENV=1', f'VPN_OPTIONS_FILE={options}',
                             f'VPN_RUNTIME_DIR={self.work}', f"AWG_INTERFACE=awg{self.p['slot']}",
-                            f"SOCKS_PORT={1080 + self.p['slot']}", '/run.sh'])
+                            f"SOCKS_PORT={1080 + self.p['slot']}",
+                            f'SOCKS_UDP_IP={self.peer if prefix else "0.0.0.0"}', '/run.sh'])
 
     def started(self):
         self.state = 'running_unverified'
-        self.log('Процессы запущены. Проверьте сайт через SOCKS; это ещё не подтверждение VPN.')
+        self.last_probe = None
+        self.log('Подключение запущено.')
+        if self.p['kind'] in PERSONAL or self.p.get('probe_url'):
+            threading.Thread(target=self.monitor_connection, daemon=True).start()
         threading.Thread(target=self.monitor, daemon=True).start()
 
     def log(self, text):
@@ -87,11 +94,6 @@ class Runtime:
         self.state = 'starting'
         try:
             self.work.mkdir(parents=True, exist_ok=True, mode=0o700)
-            if self.p['kind'] in PERSONAL and self.p['slot'] == 0:
-                # Preserve the original direct listener, UDP and routing on 1080.
-                self.start_personal([])
-                self.started()
-                return
             run('ip', 'netns', 'add', self.ns)
             self.networked = True
             # Docker's 127.0.0.11 resolver is not reachable from a new namespace.
@@ -127,9 +129,9 @@ class Runtime:
             run(*ns, 'ip', 'addr', 'add', self.peer + '/30', 'dev', 'eth0')
             run(*ns, 'ip', 'link', 'set', 'eth0', 'up')
             run(*ns, 'ip', 'link', 'set', 'lo', 'up')
-            run(*ns, 'sysctl', '-qw', 'net.ipv6.conf.all.disable_ipv6=1')
             run(*ns, 'ip', 'route', 'add', 'default', 'via', self.gateway)
-            run('sysctl', '-qw', 'net.ipv4.ip_forward=1')
+            if run('sysctl', '-n', 'net.ipv4.ip_forward').stdout.strip() != '1':
+                run('sysctl', '-qw', 'net.ipv4.ip_forward=1')
             run('iptables', '-t', 'nat', '-A', 'POSTROUTING', '-s', self.peer + '/32', '-j', 'MASQUERADE')
             if self.p['kind'] in PERSONAL:
                 # Relay the container's resolver, including Docker's loopback DNS.
@@ -138,8 +140,7 @@ class Runtime:
                 self.spawn(['python3', '/app/dns_forward.py', self.gateway, ','.join(upstreams), '53'], log=False)
                 (nsdir / 'resolv.conf').write_text(f'nameserver {self.gateway}\n')
                 self.start_personal(ns)
-                self.spawn(['socat', f"TCP4-LISTEN:{1080 + self.p['slot']},fork,reuseaddr",
-                            f"TCP4:{self.peer}:{1080 + self.p['slot']}"], log=False)
+                self.start_bridge()
                 self.started()
                 return
             # Only replies on the veth are allowed for the unprivileged SOCKS user.
@@ -180,10 +181,16 @@ class Runtime:
                 conf = self.write('snx.conf', '\n'.join(f'{k}={v}' for k, v in values.items()) + '\n')
                 args = ['snx-rs', '-c', conf]
             self.spawn(ns + args)
+            config = self.socks_config(self.peer, {'protocol': 'freedom', 'settings': {'domainStrategy': 'UseIPv4'}})
+            socks_conf = self.write('socks.json', json.dumps(config))
+            # This config contains no VPN credentials and is read by nobody.
+            self.work.parent.chmod(0o755)
+            self.work.chmod(0o755)
+            Path(socks_conf).chmod(0o644)
             self.spawn(ns + ['unshare', '--mount', '/bin/sh', '-c',
-                'mount --bind "$1" /etc/resolv.conf && exec setpriv --reuid=65534 --regid=65534 --clear-groups microsocks -i "$2" -p 1080',
-                'socks', resolver, self.peer], log=False)
-            self.spawn(['socat', f"TCP4-LISTEN:{1080 + self.p['slot']},fork,reuseaddr", f'TCP4:{self.peer}:1080'], log=False)
+                'mount --bind "$1" /etc/resolv.conf && exec setpriv --reuid=65534 --regid=65534 --clear-groups xray run -config "$2"',
+                'socks', resolver, socks_conf], log=False)
+            self.start_bridge()
             self.spawn(ns + ['setpriv', '--reuid=65534', '--regid=65534', '--clear-groups',
                             'python3', '/app/dns_forward.py', self.peer, self.p['dns']], log=False)
             for incoming, outgoing in [('TCP4-LISTEN', 'TCP4'), ('UDP4-RECVFROM', 'UDP4')]:
@@ -195,6 +202,52 @@ class Runtime:
                 self.log(exc.stderr.strip())
             self.stop()
             self.state = 'error'
+
+    def socks_config(self, address, outbound):
+        return {'log': {'loglevel': 'warning'},
+                'inbounds': [{'listen': address, 'port': 1080 + self.p['slot'],
+                              'protocol': 'socks', 'settings': {'auth': 'noauth', 'udp': True, 'ip': address}}],
+                'outbounds': [outbound]}
+
+    def start_bridge(self):
+        config = self.socks_config('0.0.0.0', {
+            'protocol': 'socks', 'settings': {'servers': [
+                {'address': self.peer, 'port': 1080 + self.p['slot']} ]}})
+        path = self.write('bridge.json', json.dumps(config))
+        self.spawn(['xray', 'run', '-config', path], log=False)
+
+    def monitor_connection(self):
+        if self.stopping.wait(5):
+            return
+        while not self.stopping.is_set():
+            try:
+                self.check_connection()
+            except (ValueError, OSError, subprocess.SubprocessError):
+                pass
+            if self.stopping.wait(30):
+                return
+
+    def check_connection(self):
+        with self.probe_lock:
+            target = self.p.get('probe_url')
+            if target:
+                urls = [target]
+            elif self.p['kind'] in PERSONAL:
+                urls = [u.strip() for u in self.p.get('watchdog_urls', '').split(',') if u.strip()]
+                urls = urls or ['https://www.cloudflare.com/cdn-cgi/trace', 'https://www.google.com/generate_204']
+            else:
+                raise ValueError('Укажите рабочий сайт в настройках подключения — он будет использоваться для проверки.')
+            for url in urls:
+                try:
+                    result = self.probe(url)
+                except (OSError, subprocess.SubprocessError):
+                    result = {'reachable': False, 'http_status': '', 'message': 'Нет ответа через VPN'}
+                result.update(url=url, checked_at=time.time())
+                if result['reachable']:
+                    break
+            if not self.stopping.is_set():
+                self.last_probe = result
+            return result
 
     def monitor(self):
         while not self.stopping.wait(2):
@@ -235,6 +288,7 @@ class Runtime:
                 self.networked = False
             shutil.rmtree(self.work, ignore_errors=True)
             self.state = 'stopped'
+            self.last_probe = None
 
     def probe(self, url):
         from urllib.parse import urlsplit

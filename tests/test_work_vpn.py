@@ -13,6 +13,9 @@ from dns_forward import forward, read_exact, minimal_reply
 
 class ProfileTests(unittest.TestCase):
     def setUp(self):
+        ports = patch.object(Manager, 'port_available', return_value=True)
+        ports.start()
+        self.addCleanup(ports.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.manager = Manager(Path(self.tmp.name))
         self.profile = dict(name='Работа', slot=1, kind='openvpn',

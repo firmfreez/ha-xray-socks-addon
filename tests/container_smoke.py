@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -38,6 +39,30 @@ def fetch(port, url):
                           text=True, capture_output=True, timeout=6)
 
 
+def udp_fetch(port, host, target_port, payload=b'udp-through-vpn'):
+    with socket.create_connection(('127.0.0.1', port), timeout=3) as control:
+        control.sendall(b'\x05\x01\x00')
+        assert control.recv(2) == b'\x05\x00'
+        control.sendall(b'\x05\x03\x00\x01' + bytes(6))
+        reply = b''
+        while len(reply) < 10:
+            chunk = control.recv(10-len(reply))
+            assert chunk, 'SOCKS UDP association closed'
+            reply += chunk
+        assert reply[:4] == b'\x05\x00\x00\x01', reply
+        address = socket.inet_ntoa(reply[4:8])
+        if address == '0.0.0.0':
+            address = '127.0.0.1'
+        relay_port = struct.unpack('!H', reply[8:10])[0]
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+            udp.settimeout(3)
+            packet = b'\x00\x00\x00\x01' + socket.inet_aton(host) + struct.pack('!H', target_port) + payload
+            udp.sendto(packet, (address, relay_port))
+            response, _ = udp.recvfrom(65535)
+            assert response.endswith(payload), response
+            return response
+
+
 def synthetic_tunnel(base):
     bindir = base / 'bin'
     bindir.mkdir()
@@ -61,6 +86,16 @@ def synthetic_tunnel(base):
         def log_message(self, *_):
             pass
 
+    echo = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    echo.bind(('0.0.0.0', 18081))
+    def echo_udp():
+        try:
+            while True:
+                data, peer = echo.recvfrom(65535)
+                echo.sendto(data, peer)
+        except OSError:
+            pass
+    threading.Thread(target=echo_udp, daemon=True).start()
     http = ThreadingHTTPServer(('0.0.0.0', 18080), Handler)
     threading.Thread(target=http.serve_forever, daemon=True).start()
     try:
@@ -79,12 +114,20 @@ def synthetic_tunnel(base):
         run('ip', 'netns', 'exec', runtime.ns, 'ip', 'link', 'set', 'tun-test', 'up')
         response = fetch(1081, 'http://10.250.0.1:18080')
         assert response.returncode == 0 and response.stdout == 'synthetic-work-resource', response.stderr
+        udp_fetch(1081, '10.250.0.1', 18081)
         run('ip', 'link', 'delete', 'testvpn')
         assert fetch(1081, 'http://10.250.0.1:18080').returncode != 0, 'Tunnel loss leaked traffic'
-        print('PASS: actual SOCKS relay, namespace routing and tunnel-loss egress block', flush=True)
+        try:
+            udp_fetch(1081, runtime.gateway, 18081)
+        except (TimeoutError, OSError):
+            pass
+        else:
+            raise AssertionError('UDP bypassed the absent VPN')
+        print('PASS: TCP and UDP through SOCKS, namespace routing and tunnel-loss egress block', flush=True)
     finally:
         print('\n'.join(runtime.logs), flush=True)
         runtime.stop()
+        echo.close()
         http.shutdown()
         http.server_close()
         os.environ['PATH'] = original_path
@@ -101,6 +144,10 @@ def primary_xray(base):
         with socket.create_connection(('127.0.0.1', 1080), timeout=3) as sock:
             sock.sendall(b'\x05\x01\x00')
             assert sock.recv(2) == b'\x05\x00', 'Primary Xray SOCKS handshake failed'
+        deadline = time.monotonic() + 20
+        while not (runtime.work / 'xray/config.json').exists() and time.monotonic() < deadline:
+            assert runtime.state != 'error', '\n'.join(runtime.logs)
+            time.sleep(.25)
         config = json.loads((runtime.work / 'xray/config.json').read_text())
         assert config['inbounds'][0]['settings']['udp'] is True
         print('PASS: original Xray runner, private options and primary TCP/UDP configuration', flush=True)
@@ -134,6 +181,12 @@ def isolated_awg(base):
             time.sleep(.5)
         else:
             raise AssertionError('Isolated AWG/Xray did not start: ' + '\n'.join(runtime.logs))
+        deadline = time.monotonic() + 35
+        while time.monotonic() < deadline:
+            if run('ip', 'netns', 'exec', runtime.ns, 'ip', 'link', 'show', 'awg2', check=False).returncode == 0:
+                break
+            assert runtime.state != 'error', '\n'.join(runtime.logs)
+            time.sleep(.25)
         run('ip', 'netns', 'exec', runtime.ns, 'ip', 'link', 'show', 'awg2')
         print('PASS: real AWG userspace interface and isolated Xray SOCKS handshake', flush=True)
     finally:

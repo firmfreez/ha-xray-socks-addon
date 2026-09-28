@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'local_xray_socks' / 'manager'))
 from migration import migrate, legacy_profiles
@@ -17,6 +17,9 @@ AWG = '[Interface]\nPrivateKey = secret\nAddress = 10.0.0.2/32\n[Peer]\nPublicKe
 
 class MigrationTests(unittest.TestCase):
     def setUp(self):
+        ports = patch.object(Manager, 'port_available', return_value=True)
+        ports.start()
+        self.addCleanup(ports.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.base = Path(self.tmp.name)
         self.options = self.base / 'options.json'
@@ -75,17 +78,20 @@ class MigrationTests(unittest.TestCase):
 
 
 class RuntimeIntegrationContractTests(unittest.TestCase):
-    def test_primary_reuses_original_runner_without_network_namespace(self):
+    def test_port_1080_uses_same_isolation_as_other_ports(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             profile = validate(dict(name='Primary', kind='vless', slot=0, link=LINK,
                                     watchdog_enabled=False, autostart=True))
             runtime = Runtime(profile, directory)
             runtime.work = directory / 'run'
-            with patch('runtime.run') as commands, patch.object(runtime, 'spawn') as spawn, patch.object(runtime, 'started'):
+            resolver = directory / 'resolver'
+            resolver.write_text('nameserver 127.0.0.11\n')
+            with patch('runtime.NETNS_ROOT', directory / 'netns'), patch('runtime.RESOLV_FILE', resolver), \
+                 patch('runtime.run') as commands, patch.object(runtime, 'spawn') as spawn, patch.object(runtime, 'started'):
                 runtime.start()
-            commands.assert_not_called()
-            args = spawn.call_args.args[0]
+            commands.assert_any_call('ip', 'netns', 'add', 'wvpn0')
+            args = next(c.args[0] for c in spawn.call_args_list if c.args[0][-1] == '/run.sh')
             self.assertIn('SOCKS_PORT=1080', args)
             self.assertEqual(args[-1], '/run.sh')
             options = json.loads((runtime.work / 'options.json').read_text())
@@ -109,7 +115,10 @@ class RuntimeIntegrationContractTests(unittest.TestCase):
             self.assertEqual(runner[:4], ['ip', 'netns', 'exec', 'wvpn2'])
             self.assertIn('SOCKS_PORT=1082', runner)
             self.assertIn('AWG_INTERFACE=awg2', runner)
-            self.assertIn(['socat', 'TCP4-LISTEN:1082,fork,reuseaddr', 'TCP4:10.253.2.2:1082'], calls)
+            self.assertIn(['xray', 'run', '-config', str(runtime.work / 'bridge.json')], calls)
+            bridge = json.loads((runtime.work / 'bridge.json').read_text())
+            self.assertTrue(bridge['inbounds'][0]['settings']['udp'])
+            self.assertEqual(bridge['outbounds'][0]['settings']['servers'][0]['port'], 1082)
             self.assertTrue(runtime.networked)
 
     def test_openvpn_installs_egress_block_before_starting_proxy(self):
@@ -121,12 +130,12 @@ class RuntimeIntegrationContractTests(unittest.TestCase):
             runtime.work = directory / 'run'
             events = []
             with patch('runtime.NETNS_ROOT', directory / 'netns'), \
-                 patch('runtime.run', side_effect=lambda *a, **k: events.append(('run', a))), \
+                 patch('runtime.run', side_effect=lambda *a, **k: (events.append(('run', a)) or MagicMock(stdout='1'))), \
                  patch.object(runtime, 'spawn', side_effect=lambda a, **k: events.append(('spawn', a))), \
                  patch.object(runtime, 'started'):
                 runtime.start()
             reject = next(i for i, (kind, args) in enumerate(events) if kind == 'run' and 'REJECT' in args)
-            proxy = next(i for i, (kind, args) in enumerate(events) if kind == 'spawn' and any('microsocks' in s for s in args))
+            proxy = next(i for i, (kind, args) in enumerate(events) if kind == 'spawn' and any('setpriv' in s and 'xray' in s for s in args))
             self.assertLess(reject, proxy)
             self.assertEqual((runtime.work / 'resolv.conf').stat().st_mode & 0o777, 0o644)
 

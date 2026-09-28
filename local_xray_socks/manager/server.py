@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import socket
 import subprocess
 import threading
 import uuid
@@ -38,8 +39,23 @@ class Manager:
         result['state'] = runtime.state if runtime else 'stopped'
         result['port'] = 1080 + p['slot']
         result['dns_port'] = None if p['kind'] in PERSONAL else 10530 + p['slot']
-        result['udp'] = p['slot'] == 0 and p['kind'] in PERSONAL
+        result['udp'] = True
+        result['probe'] = runtime.last_probe if runtime else None
         return result
+
+    @staticmethod
+    def port_available(port):
+        try:
+            for family in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
+                with socket.socket(socket.AF_INET, family) as sock:
+                    sock.bind(('0.0.0.0', port))
+            return True
+        except OSError:
+            return False
+
+    def available_ports(self):
+        used = {1080 + p['slot'] for p in self.profiles.values()}
+        return [p for p in range(1080, 1089) if p not in used and self.port_available(p)]
 
     def save(self, data):
         with self.lock:
@@ -62,11 +78,13 @@ class Manager:
                 raise ValueError('Слишком много файлов')
             allowed = {'name', 'kind', 'slot', 'dns', 'server', 'login_type', 'username', 'password',
                        'cert_password', 'key_password', 'ovpn', 'certificate', 'ca_file', 'tunnel', 'autostart',
-                       'link', 'amneziawg_config', 'loglevel', 'watchdog_enabled', 'watchdog_urls'}
+                       'link', 'amneziawg_config', 'loglevel', 'watchdog_enabled', 'watchdog_urls', 'probe_url'}
             p = validate({k: v for k, v in data.items() if k in allowed})
+            if not self.port_available(1080 + p['slot']):
+                raise ValueError('Порт занят другим сервисом (TCP или UDP). Выберите свободный.')
             p['id'] = ident
             if any(x['slot'] == p['slot'] and x['id'] != ident for x in self.profiles.values()):
-                raise ValueError('Этот SOCKS-слот уже занят')
+                raise ValueError('Этот порт уже занят другим подключением')
             directory = self.root / ident
             assets = directory / 'assets'
             existing = {x.name for x in assets.iterdir()} if assets.exists() else set()
@@ -101,10 +119,21 @@ class Manager:
             return self.public(p)
 
     def action(self, ident, action, data):
+        if action == 'probe':
+            with self.lock:
+                runtime = self.runtimes.get(ident)
+                if not runtime or runtime.state != 'running_unverified':
+                    raise ValueError('Сначала запустите профиль')
+            return runtime.check_connection()
         with self.lock:
             if ident not in self.profiles:
                 raise ValueError('Профиль не найден')
             p = self.profiles[ident]
+            if action == 'details':
+                result = self.public(p)
+                for key in ('link', 'amneziawg_config', 'ovpn'):
+                    result[key] = p.get(key, '')
+                return result
             if action == 'info':
                 if p['kind'] != 'checkpoint':
                     raise ValueError('Только для Check Point')
@@ -131,10 +160,6 @@ class Manager:
                 if runtime:
                     runtime.stop()
                 return self.public(p)
-            if action == 'probe':
-                if not runtime or runtime.state != 'running_unverified':
-                    raise ValueError('Сначала запустите профиль')
-                return runtime.probe(str(data.get('url', '')))
             raise ValueError('Неизвестная операция')
 
 
@@ -169,6 +194,8 @@ def handler(manager):
             with manager.lock:
                 if path == '/api/profiles':
                     return self.reply(200, [manager.public(p) for p in manager.profiles.values()])
+                if path == '/api/ports':
+                    return self.reply(200, manager.available_ports())
                 if path == '/api/status':
                     return self.reply(200, {'notice': manager.notice})
                 if path.startswith('/api/logs/'):

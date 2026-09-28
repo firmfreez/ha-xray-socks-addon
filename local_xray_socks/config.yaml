@@ -1,5 +1,5 @@
 name: "Local Xray SOCKS"
-version: "0.6.1"
+version: "0.7.0"
 slug: "local_xray_socks"
 description: "VPN manager: VLESS, AmneziaWG, OpenVPN and Check Point for Keenetic"
 url: "https://github.com/firmfreez/ha-xray-socks-addon"
@@ -18,13 +18,21 @@ ports:
   1080/tcp: 1080
   1080/udp: 1080
   1081/tcp: 1081
+  1081/udp: 1081
   1082/tcp: 1082
+  1082/udp: 1082
   1083/tcp: 1083
+  1083/udp: 1083
   1084/tcp: 1084
+  1084/udp: 1084
   1085/tcp: 1085
+  1085/udp: 1085
   1086/tcp: 1086
+  1086/udp: 1086
   1087/tcp: 1087
+  1087/udp: 1087
   1088/tcp: 1088
+  1088/udp: 1088
   10530/tcp: 10530
   10530/udp: 10530
   10531/tcp: 10531
@@ -45,16 +53,24 @@ ports:
   10538/udp: 10538
 
 ports_description:
-  1080/tcp: "Primary SOCKS5 (existing port)"
-  1080/udp: "Primary VLESS/AmneziaWG UDP relay"
-  1081/tcp: "Profile 1: SOCKS5 TCP"
-  1082/tcp: "Profile 2: SOCKS5 TCP"
-  1083/tcp: "Profile 3: SOCKS5 TCP"
-  1084/tcp: "Profile 4: SOCKS5 TCP"
-  1085/tcp: "Profile 5: SOCKS5 TCP"
-  1086/tcp: "Profile 6: SOCKS5 TCP"
-  1087/tcp: "Profile 7: SOCKS5 TCP"
-  1088/tcp: "Profile 8: SOCKS5 TCP"
+  1080/tcp: "SOCKS5 TCP"
+  1080/udp: "SOCKS5 UDP"
+  1081/tcp: "SOCKS5 TCP"
+  1081/udp: "SOCKS5 UDP"
+  1082/tcp: "SOCKS5 TCP"
+  1082/udp: "SOCKS5 UDP"
+  1083/tcp: "SOCKS5 TCP"
+  1083/udp: "SOCKS5 UDP"
+  1084/tcp: "SOCKS5 TCP"
+  1084/udp: "SOCKS5 UDP"
+  1085/tcp: "SOCKS5 TCP"
+  1085/udp: "SOCKS5 UDP"
+  1086/tcp: "SOCKS5 TCP"
+  1086/udp: "SOCKS5 UDP"
+  1087/tcp: "SOCKS5 TCP"
+  1087/udp: "SOCKS5 UDP"
+  1088/tcp: "SOCKS5 TCP"
+  1088/udp: "SOCKS5 UDP"
   10530/tcp: "Profile 0: corporate DNS (tcp)"
   10530/udp: "Profile 0: corporate DNS (udp)"
   10531/tcp: "Profile 1: corporate DNS (tcp)"
@@ -74,29 +90,11 @@ ports_description:
   10538/tcp: "Profile 8: corporate DNS (tcp)"
   10538/udp: "Profile 8: corporate DNS (udp)"
 
-options:
-  protocol: "vless"
-  link: ""
-  amneziawg_profile: "1"
-  amneziawg_config: ""
-  amneziawg_config_2: ""
-  amneziawg_config_3: ""
-  amneziawg_config_4: ""
-  loglevel: "warning"
-  watchdog_enabled: true
-  watchdog_urls: "https://www.cloudflare.com/cdn-cgi/trace,https://www.google.com/generate_204"
-
-schema:
-  protocol: "list(vless|amneziawg)"
-  link: str
-  amneziawg_profile: "list(1|2|3|4)"
-  amneziawg_config: str
-  amneziawg_config_2: str
-  amneziawg_config_3: str
-  amneziawg_config_4: str
-  loglevel: "list(none|error|warning|info|debug)"
-  watchdog_enabled: "bool?"
-  watchdog_urls: "str?"
+# Connection settings are managed in the Ingress panel.
+options: {}
+schema: false
+# Read only this add-on's previous options for upgrades from pre-panel versions.
+hassio_api: true
 
 privileged:
   - NET_ADMIN

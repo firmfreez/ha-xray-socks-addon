@@ -7,21 +7,23 @@ Home Assistant add-on repository with a local Xray-based SOCKS5 proxy for Raspbe
 - `local_xray_socks`: Runs Xray inside a Home Assistant add-on container and exposes a SOCKS5 port for LAN clients such as Keenetic.
 
 
-## Upgrade to 0.6.1
+## Upgrade to 0.7.0
 
-The existing `local_xray_socks` add-on now includes a single **VPN Manager**
-Ingress panel for VLESS, AmneziaWG, OpenVPN and Check Point. Its slug and primary
-port 1080 are unchanged. Update the existing installation from the same repository;
-do not uninstall it or install a second add-on.
+Manage VLESS, AmneziaWG, OpenVPN and Check Point in the **VPN Manager** Ingress
+panel. Saved configurations can be viewed and edited. The obsolete HA options
+form is hidden; existing profiles and one-time migration of old settings are retained.
 
-On first launch, legacy options are imported once into named profiles. The active
-connection keeps 1080 and autostarts; other saved profiles remain stopped.
-After migration, use the panel to manage settings. Legacy YAML options below
-remain for migration compatibility only.
+Assign any VPN type to any free SOCKS port from 1080–1088. Every port supports
+TCP and UDP. The panel offers a one-click connection check and displays its
+last result and time; configure an internal site for corporate VPNs.
 
-The ARM64 image builds successfully. HA OS networking and real VPN connections
-still need verification on the target installation. See [upgrade and setup instructions](local_xray_socks/DOCS.md),
-including new permissions, backup, DNS and protocol limitations.
+VLESS links support TCP, WebSocket, gRPC, XHTTP, HTTPUpgrade and mKCP, with
+TLS, REALITY or no transport security where supported by Xray.
+
+The ARM64 image and synthetic TCP/UDP tunnel routing have been tested locally,
+including blocking corporate traffic when its tunnel is absent. Real server
+authentication and HA OS networking must still be verified on the installation.
+See [upgrade and setup instructions](local_xray_socks/DOCS.md).
 
 ## Add Repository To Home Assistant
 

@@ -2,8 +2,8 @@
 import ipaddress
 import re
 import shlex
-from urllib.parse import urlsplit, parse_qs
-from uuid import UUID
+from urllib.parse import urlsplit
+from vless import outbound
 
 KINDS = ('vless', 'amneziawg', 'openvpn', 'checkpoint')
 PERSONAL = ('vless', 'amneziawg')
@@ -92,17 +92,7 @@ def validate(p):
         if not isinstance(p.get(key, ''), str):
             raise ValueError(f'Ожидается текст: {key}')
     if p['kind'] == 'vless':
-        try:
-            uri = urlsplit(p.get('link', ''))
-            UUID(uri.username or '')
-            if uri.scheme != 'vless' or not uri.hostname or not uri.port:
-                raise ValueError()
-            options = parse_qs(uri.query)
-            for key, expected in [('type', 'tcp'), ('security', 'tls'), ('encryption', 'none')]:
-                if options.get(key, [expected]) != [expected]:
-                    raise ValueError()
-        except ValueError:
-            raise ValueError('Нужна VLESS-ссылка с UUID, host:port, TCP и TLS (как в версии 0.5)') from None
+        outbound(p.get('link', ''))
     if p['kind'] == 'amneziawg':
         text = p.get('amneziawg_config', '')
         if '[Interface]' not in text or '[Peer]' not in text:
@@ -127,6 +117,14 @@ def validate(p):
         p['tunnel'] = p.get('tunnel', 'ssl')
         for key in ('certificate', 'ca_file'):
             p[key] = filename(p[key]) if p.get(key) else ''
+    target = str(p.get('probe_url', '')).strip()
+    if target and '://' not in target:
+        target = 'https://' + target
+    if target:
+        url = urlsplit(target)
+        if url.scheme not in ('http', 'https') or not url.hostname or url.username or url.password:
+            raise ValueError('Укажите адрес сайта для проверки: https://example.com')
+    p['probe_url'] = target
     p['autostart'] = p.get('autostart') is True
     return p
 

@@ -1,5 +1,7 @@
 """One-time, restartable migration from Supervisor options to named profiles."""
 import json
+import os
+from urllib.request import Request, urlopen
 from pathlib import Path
 import uuid
 
@@ -37,6 +39,18 @@ def migrate(manager, options_file=Path('/data/options.json')):
     raw = options_file.read_bytes()
     options = json.loads(raw)
     backup = manager.root / 'options-before-0.6.json'
+    # schema:false hides the obsolete form; Supervisor filters options.json.
+    # Its persisted self-info still holds pre-panel options during upgrades.
+    if not legacy_profiles(options):
+        if backup.exists():
+            raw = backup.read_bytes()
+            options = json.loads(raw)
+        elif os.environ.get('SUPERVISOR_TOKEN'):
+            request = Request('http://supervisor/addons/self/info', headers={
+                'Authorization': 'Bearer ' + os.environ['SUPERVISOR_TOKEN']})
+            with urlopen(request, timeout=10) as response:
+                options = json.load(response)['data']['options']
+            raw = json.dumps(options, ensure_ascii=False).encode()
     if not backup.exists():
         with backup.open('xb') as output:
             output.write(raw)

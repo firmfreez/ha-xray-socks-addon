@@ -1,3 +1,18 @@
+# 0.7.0
+
+- Hide obsolete Home Assistant options; manage connections in VPN Manager.
+- Show saved VLESS/AWG/OpenVPN configuration and populate the edit form.
+- List only free ports; every VPN type can use any port from 1080–1088.
+- Support SOCKS5 TCP and UDP for all profiles through isolated Xray proxies.
+- Replace the repeated site prompt with a one-click check, saved target,
+  automatic checks, and a visible last result and timestamp.
+- Add a scroll-to-bottom button and follow new log lines while at the bottom.
+- Support VLESS TCP, WebSocket, gRPC, XHTTP, HTTPUpgrade and mKCP share links,
+  including TLS and REALITY settings instead of forcing TCP+TLS.
+- Preserve per-profile environment through the HA container launcher and avoid
+  writing read-only sysctls when forwarding is already enabled.
+- Verify ARM64 build, synthetic TCP/UDP tunnel traffic and tunnel-loss blocking.
+
 # 0.6.1
 
 - Fix Home Assistant installation failing with `microsocks (no such package)`:
