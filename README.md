@@ -7,7 +7,7 @@ Home Assistant add-on repository with a local Xray-based SOCKS5 proxy for Raspbe
 - `local_xray_socks`: Runs Xray inside a Home Assistant add-on container and exposes a SOCKS5 port for LAN clients such as Keenetic.
 
 
-## Upgrade to 0.6.0
+## Upgrade to 0.6.1
 
 The existing `local_xray_socks` add-on now includes a single **VPN Manager**
 Ingress panel for VLESS, AmneziaWG, OpenVPN and Check Point. Its slug and primary
@@ -19,8 +19,8 @@ connection keeps 1080 and autostarts; other saved profiles remain stopped.
 After migration, use the panel to manage settings. Legacy YAML options below
 remain for migration compatibility only.
 
-The implementation is experimental: unit tests pass, but the ARM64 image and
-HA OS networking have not yet been verified. See [upgrade and setup instructions](local_xray_socks/DOCS.md),
+The ARM64 image builds successfully. HA OS networking and real VPN connections
+still need verification on the target installation. See [upgrade and setup instructions](local_xray_socks/DOCS.md),
 including new permissions, backup, DNS and protocol limitations.
 
 ## Add Repository To Home Assistant

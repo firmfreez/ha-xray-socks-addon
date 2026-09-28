@@ -22,7 +22,7 @@ LABEL \
   io.hass.type="app" \
   io.hass.arch="${BUILD_ARCH}"
 
-RUN apk add --no-cache curl unzip jq bash iproute2 openresolv python3 openvpn microsocks socat iptables util-linux
+RUN apk add --no-cache curl unzip jq bash iproute2 openresolv python3 openvpn socat iptables util-linux
 
 # Keep the engine and its userspace configuration tools on compatible AWG 3.1
 # revisions. The tools project did not publish an AWG 3.1 tag yet, so pin the
@@ -31,6 +31,13 @@ ARG AMNEZIAWG_GO_VERSION="v3.1.20260814"
 ARG AMNEZIAWG_TOOLS_VERSION="ee0f0a9aa34ff0a0da4b3433b9512781cfe02843"
 
 RUN apk add --no-cache --virtual .build-deps build-base go linux-headers make \
+    && curl -fL --retry 3 https://github.com/rofl0r/microsocks/archive/refs/tags/v1.0.5.tar.gz -o /tmp/microsocks.tar.gz \
+    && echo '939d1851a18a4c03f3cc5c92ff7a50eaf045da7814764b4cb9e26921db15abc8  /tmp/microsocks.tar.gz' | sha256sum -c - \
+    && mkdir -p /tmp/microsocks \
+    && tar -xzf /tmp/microsocks.tar.gz -C /tmp/microsocks --strip-components=1 \
+    && make -C /tmp/microsocks \
+    && install -m 0755 /tmp/microsocks/microsocks /usr/local/bin/microsocks \
+    && rm -rf /tmp/microsocks /tmp/microsocks.tar.gz \
     && curl -L "https://github.com/amnezia-vpn/amneziawg-go/archive/${AMNEZIAWG_GO_VERSION}.tar.gz" -o /tmp/amneziawg-go.tar.gz \
     && mkdir -p /tmp/amneziawg-go \
     && tar -xzf /tmp/amneziawg-go.tar.gz -C /tmp/amneziawg-go --strip-components=1 \

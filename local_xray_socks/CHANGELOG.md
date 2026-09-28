@@ -1,3 +1,10 @@
+# 0.6.1
+
+- Fix Home Assistant installation failing with `microsocks (no such package)`:
+  build pinned microsocks 1.0.5 from source instead of installing it with apk.
+- Remove the GitHub Actions validation workflow.
+- Successfully build the ARM64 image locally and verify bundled VPN binaries.
+
 # 0.6.0
 
 - Add a single Home Assistant Ingress panel for VLESS, AmneziaWG, OpenVPN and
