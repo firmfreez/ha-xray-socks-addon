@@ -1,3 +1,8 @@
+# 0.7.7
+
+- Use neutral example names and server addresses in the Check Point UI and tests.
+- Remove server-specific tunnel recommendations.
+
 # 0.7.6
 
 - Fix corporate DNS forwarding when the VPN permits UDP DNS but blocks TCP DNS.
