@@ -67,7 +67,7 @@ def synthetic_tunnel(base, kind="openvpn"):
     bindir = base / 'bin'
     bindir.mkdir(parents=True)
     stub = bindir / ('openvpn' if kind == 'openvpn' else 'snx-rs')
-    stub.write_text('#!/bin/sh\n'+("printf 'nameserver 10.250.0.1\\n' > /etc/resolv.conf\n" if kind == 'checkpoint' else '')+'exec sleep 120\n')
+    stub.write_text('#!/bin/sh\nset -e\n'+("sysctl -qw net.ipv4.conf.lo.rp_filter=2\nprintf 'nameserver 10.250.0.1\\n' > /etc/resolv.conf\n" if kind == 'checkpoint' else '')+'exec sleep 120\n')
     stub.chmod(0o755)
     original_path = os.environ['PATH']
     os.environ['PATH'] = str(bindir) + ':' + original_path
@@ -77,6 +77,8 @@ def synthetic_tunnel(base, kind="openvpn"):
                             ovpn='client\ndev tun\n', dns='10.250.0.1' if kind == 'openvpn' else '',
                             server='127.0.0.1', login_type='vpn_Test'))
     original_resolver = Path('/etc/resolv.conf').read_text()
+    host_rp_filter = Path('/proc/sys/net/ipv4/conf/lo/rp_filter').read_text()
+    host_sysctl_writable = os.access('/proc/sys/net/ipv4/conf/lo/rp_filter', os.W_OK)
     runtime = Runtime(profile, directory)
 
     class Handler(BaseHTTPRequestHandler):
@@ -112,6 +114,8 @@ def synthetic_tunnel(base, kind="openvpn"):
         if kind == 'checkpoint':
             assert runtime.dns_status()['servers'] == ['10.250.0.1']
             assert Path('/etc/resolv.conf').read_text() == original_resolver, 'Check Point changed container DNS'
+            assert Path('/proc/sys/net/ipv4/conf/lo/rp_filter').read_text() == host_rp_filter, 'Changed container sysctl'
+            assert os.access('/proc/sys/net/ipv4/conf/lo/rp_filter', os.W_OK) == host_sysctl_writable, 'Changed container mount protection'
         # The root transport can reach the physical interface, SOCKS must not.
         run('ip', 'netns', 'exec', runtime.ns, 'curl', '--fail', '--max-time', '3',
             f'http://{runtime.gateway}:18080')

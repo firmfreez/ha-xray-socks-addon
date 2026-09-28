@@ -1,3 +1,12 @@
+# 0.7.5
+
+- Replace connection cards with a responsive list and a secondary actions menu.
+- Keep only the relevant connect/disconnect button visible in each row.
+
+- Fix Check Point startup on Home Assistant with read-only /proc/sys.
+- Expose network sysctls only inside the profile’s network and mount namespaces.
+- Test Check Point sysctl setup with the add-on capabilities instead of privileged Docker.
+
 # 0.7.4
 
 - Add a dedicated Personal Certificate setup with .p12/.pfx upload.

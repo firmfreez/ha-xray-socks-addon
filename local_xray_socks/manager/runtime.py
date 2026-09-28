@@ -202,9 +202,8 @@ class Runtime:
                     values['ca-cert'] = str(self.directory / 'assets' / self.p['ca_file'])
                 conf = self.write('snx.conf', '\n'.join(f'{k}={v}' for k, v in values.items()) + '\n')
                 # snx-rs writes only this profile's resolver, never the container's.
-                args = ['unshare', '--mount', '/bin/sh', '-c',
-                        'mount --bind "$1" /etc/resolv.conf && exec snx-rs -c "$2"',
-                        'checkpoint', resolver, conf]
+                args = ['unshare', '--mount', '/bin/sh', '/app/checkpoint-start.sh',
+                        resolver, conf]
             self.spawn(ns + args)
             config = self.socks_config(self.peer, {'protocol': 'freedom', 'settings': {'domainStrategy': 'UseIPv4'}})
             socks_conf = self.write('socks.json', json.dumps(config))

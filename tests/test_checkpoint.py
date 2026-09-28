@@ -82,7 +82,7 @@ class CheckPointTests(unittest.TestCase):
             self.assertNotIn('\npassword=', config)
             self.assertIn('no-dns=false', config)
             self.assertNotIn('ignore-server-cert', config)
-            self.assertTrue(any('checkpoint' in call.args[0] and 'unshare' in call.args[0] for call in spawn.call_args_list))
+            self.assertTrue(any('/app/checkpoint-start.sh' in call.args[0] and 'unshare' in call.args[0] for call in spawn.call_args_list))
             resolver = runtime.work / 'resolv.conf'
             self.assertEqual(runtime.dns_status()['servers'], [])
             resolver.write_text('nameserver 10.20.0.53\nnameserver 127.0.0.1\n')

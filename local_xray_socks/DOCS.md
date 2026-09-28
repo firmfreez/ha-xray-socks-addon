@@ -132,6 +132,11 @@ management-команды, произвольные файловые пути и
    transport, чтобы трафик SOCKS шёл через туннельный интерфейс и работала
    блокировка прямого выхода.
 
+Check Point получает запись в `/proc/sys/net` только в собственных сетевом и
+mount-пространствах профиля: это нужно для настройки туннеля snx-rs в HA OS.
+Настройки сети контейнера и Home Assistant не изменяются. Предупреждение
+об отсутствии D-Bus относится к мониторингу сети и само по себе не завершает VPN.
+
 Интерактивные MFA/SSO, аппаратные токены, enrollment и проверки состояния рабочего
 устройства не реализованы в панели. CLI запускается без интерактивного ввода.
 Если сервер требует такой шаг, возможна ошибка или ожидание; остановите профиль.
@@ -210,7 +215,7 @@ SOCKS непосредственно в браузере с удалённым �
 
 ```sh
 python3 -B -m unittest discover -s tests -v
-docker build --platform linux/arm64 --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=0.7.4 -t local-xray-socks:0.7.4 local_xray_socks
+docker build --platform linux/arm64 --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=0.7.5 -t local-xray-socks:0.7.5 local_xray_socks
 ```
 
 Основной образ остаётся Home Assistant Alpine. Check Point использует неизменённый
