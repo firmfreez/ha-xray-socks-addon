@@ -1,4 +1,4 @@
-# Local Xray SOCKS 0.7.1 — обновление с общей панелью VPN
+# Local Xray SOCKS 0.7.2 — обновление с общей панелью VPN
 
 Это **обновление существующего аддона**, а не второй аддон. Каталог и slug
 `local_xray_socks` сохранены. Панель VPN Manager открывается через HA Ingress.
@@ -8,7 +8,7 @@
 
 1. Сделайте резервную копию установленного Local Xray SOCKS в Home Assistant.
 2. Используйте тот же репозиторий `https://github.com/firmfreez/ha-xray-socks-addon`,
-   который уже добавлен в магазин HA. Версия обновления — **0.7.1**.
+   который уже добавлен в магазин HA. Версия обновления — **0.7.2**.
 3. В магазине дополнений HA выберите «Проверить обновления», затем откройте
    **уже установленный Local Xray SOCKS** и нажмите «Обновить».
    Не удаляйте старый аддон и не устанавливайте копию через другой репозиторий:
@@ -205,7 +205,7 @@ SOCKS непосредственно в браузере с удалённым �
 
 ```sh
 python3 -B -m unittest discover -s tests -v
-docker build --platform linux/arm64 --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=0.7.1 -t local-xray-socks:0.7.1 local_xray_socks
+docker build --platform linux/arm64 --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=0.7.2 -t local-xray-socks:0.7.2 local_xray_socks
 ```
 
 Основной образ остаётся Home Assistant Alpine. Check Point использует неизменённый

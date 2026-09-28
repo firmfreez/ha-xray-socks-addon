@@ -61,6 +61,18 @@ class ProfileTests(unittest.TestCase):
             with self.subTest(line=line), self.assertRaises(ValueError):
                 ovpn_config(line, set())
 
+    def test_explicit_tls_client_and_common_client_options(self):
+        text = ('tls-client\npull\ndev tun\nproto udp\nremote vpn.example 1194\n'
+                'remote-cert-ku a0\nremote-cert-eku "TLS Web Server Authentication"\n'
+                'tls-timeout 2\nkeepalive 10 60\nremote-random-hostname\n'
+                'topology subnet\nroute-gateway 10.0.0.1\n'
+                'ifconfig 10.0.0.2 255.255.255.0\nreplay-window 128 30\n'
+                'disable-dco\npush-peer-info\n')
+        result = ovpn_config(text, set())
+        self.assertIn('"tls-client"', result)
+        self.assertIn('"remote-cert-eku" "TLS Web Server Authentication"', result)
+        self.assertIn('"keepalive" "10" "60"', result)
+
     def test_platform_compatibility_options(self):
         text = 'client\ndev tun\nignore-unknown-option block-outside-dns\nblock-outside-dns\n'
         normalized = ovpn_config(text, set())

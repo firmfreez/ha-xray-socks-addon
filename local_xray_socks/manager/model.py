@@ -20,7 +20,17 @@ connect-retry connect-retry-max server-poll-timeout explicit-exit-notify ping
 ping-restart ping-timer-rem mute mute-replay-warnings verb route route-ipv6
 route-metric route-delay route-nopull pull pull-filter redirect-gateway
 redirect-private dhcp-option tun-mtu mssfix sndbuf rcvbuf fast-io float
-allow-compression compress comp-lzo auth-token-user ignore-unknown-option block-outside-dns'''.split())
+allow-compression compress comp-lzo auth-token-user ignore-unknown-option block-outside-dns
+tls-client tls-timeout tls-exit tls-groups tls-cert-profile remote-cert-ku remote-cert-eku
+peer-fingerprint verify-hash x509-username-field reneg-bytes reneg-pkts replay-window
+replay-time remote-random-hostname retry-on-auth-failure keepalive ping-exit
+inactive session-timeout remap-usr1 connect-freq route-gateway route-ipv6-gateway
+route-up-delay ifconfig ifconfig-ipv6 ifconfig-nowarn topology dev-type tun-mtu-extra
+link-mtu mtu-disc mtu-test fragment socket-flags tcp-nodelay passtos rport lport
+local port bind bind-dev multihome proto-force allow-pull-fqdn client-nat
+persist-local-ip persist-remote-ip single-session push-peer-info disable-dco
+sndbuf rcvbuf ncp-ciphers ncp-disable auth-nocache auth-token auth-token-user
+'''.split())
 
 
 def filename(value):

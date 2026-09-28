@@ -1,3 +1,9 @@
+# 0.7.2
+
+- Accept explicit `tls-client` OpenVPN configurations.
+- Expand supported client directives for TLS certificate verification, keepalive,
+  reconnects, routing, addressing, MTU, replay windows and transport options.
+
 # 0.7.1
 
 - Accept OpenVPN `ignore-unknown-option` and the cross-platform
