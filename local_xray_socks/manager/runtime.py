@@ -1,6 +1,7 @@
 """Linux-only runtime. Every profile has its own routes, processes and resolver."""
 import base64
 import json
+import ipaddress
 from collections import deque
 import os
 from pathlib import Path
@@ -12,8 +13,9 @@ import subprocess
 import threading
 import time
 
+from telemetry import Traffic
 from model import ovpn_config, PERSONAL, personal_options
-from vpn_dns import publish, read_state
+from vpn_dns import publish, read_state, resolver_state
 
 NETNS_ROOT = Path('/etc/netns')
 HOSTS_FILE = Path('/etc/hosts')
@@ -40,6 +42,9 @@ class Runtime:
         self.networked = False
         self.last_probe = None
         self.probe_lock = threading.Lock()
+        self.traffic = Traffic()
+        self.external_ip = None
+        self.started_at = None
 
     def start_personal(self, prefix):
         options = self.write('options.json', json.dumps(personal_options(self.p)))
@@ -50,6 +55,8 @@ class Runtime:
 
     def started(self):
         self.state = 'running_unverified'
+        self.started_at = time.time()
+        threading.Thread(target=self.monitor_ip, daemon=True).start()
         self.last_probe = None
         self.log('Подключение запущено.')
         if self.p['kind'] in PERSONAL or self.p.get('probe_url'):
@@ -177,19 +184,27 @@ class Runtime:
                     raise ValueError('Сначала получите и выберите login-type Check Point')
                 values = {
                     'server-name': self.p['server'], 'login-type': self.p['login_type'],
-                    'user-name': self.p['username'],
-                    'password': base64.b64encode(self.p['password'].encode()).decode(),
                     'tunnel-type': self.p['tunnel'], 'transport-type': 'udp',
-                    'no-dns': 'true', 'default-route': 'false',
+                    'no-dns': 'true' if dns else 'false', 'default-route': 'false',
+                    'no-split-dns': 'true',
                     'log-level': 'info', 'keychain': 'false',
                 }
-                if self.p.get('certificate'):
+                certificate_auth = self.p.get('auth_mode', 'certificate' if self.p.get('certificate') else 'password') == 'certificate'
+                if certificate_auth:
+                    if not self.p.get('certificate'):
+                        raise ValueError('Загрузите личный сертификат .p12/.pfx')
                     values.update({'cert-type': 'pkcs12', 'cert-path': str(self.directory / 'assets' / self.p['certificate']),
                                    'cert-password': self.p['cert_password']})
+                else:
+                    values.update({'user-name': self.p['username'],
+                                   'password': base64.b64encode(self.p['password'].encode()).decode()})
                 if self.p.get('ca_file'):
                     values['ca-cert'] = str(self.directory / 'assets' / self.p['ca_file'])
                 conf = self.write('snx.conf', '\n'.join(f'{k}={v}' for k, v in values.items()) + '\n')
-                args = ['snx-rs', '-c', conf]
+                # snx-rs writes only this profile's resolver, never the container's.
+                args = ['unshare', '--mount', '/bin/sh', '-c',
+                        'mount --bind "$1" /etc/resolv.conf && exec snx-rs -c "$2"',
+                        'checkpoint', resolver, conf]
             self.spawn(ns + args)
             config = self.socks_config(self.peer, {'protocol': 'freedom', 'settings': {'domainStrategy': 'UseIPv4'}})
             socks_conf = self.write('socks.json', json.dumps(config))
@@ -201,9 +216,11 @@ class Runtime:
                 'mount --bind "$1" /etc/resolv.conf && exec setpriv --reuid=65534 --regid=65534 --clear-groups xray run -config "$2"',
                 'socks', resolver, socks_conf], log=False)
             self.start_bridge()
+            dns_input = ('resolv:' + resolver if self.p['kind'] == 'checkpoint' and not dns
+                         else '@' + str(self.work / 'dns-state.json'))
             self.spawn(ns + ['setpriv', '--reuid=65534', '--regid=65534', '--clear-groups',
                             'python3', '/app/dns_forward.py', self.peer,
-                            '@' + str(self.work / 'dns-state.json')], log=False)
+                            dns_input], log=False)
             for incoming, outgoing in [('TCP4-LISTEN', 'TCP4'), ('UDP4-RECVFROM', 'UDP4')]:
                 self.spawn(['socat', '-T', '10', f"{incoming}:{10530 + self.p['slot']},fork,reuseaddr", f'{outgoing}:{self.peer}:5353'], log=False)
             self.started()
@@ -221,6 +238,8 @@ class Runtime:
                 'outbounds': [outbound]}
 
     def dns_status(self):
+        if self.p['kind'] == 'checkpoint' and not self.p['dns']:
+            return resolver_state(self.work / 'resolv.conf')
         return read_state(self.work / 'dns-state.json')
 
     def start_bridge(self):
@@ -229,6 +248,34 @@ class Runtime:
                 {'address': self.peer, 'port': 1080 + self.p['slot']} ]}})
         path = self.write('bridge.json', json.dumps(config))
         self.spawn(['xray', 'run', '-config', path], log=False)
+
+    def metrics(self):
+        if self.state != 'running_unverified':
+            return None
+        return {'traffic': self.traffic.sample(self.host), 'external_ip': self.external_ip,
+                'uptime': max(0, time.time() - self.started_at) if self.started_at else 0}
+
+    def monitor_ip(self):
+        if self.stopping.wait(5):
+            return
+        while not self.stopping.is_set():
+            address = None
+            try:
+                result = run('curl', '--silent', '--fail', '--noproxy', '',
+                             '--proxy', f"socks5h://127.0.0.1:{1080 + self.p['slot']}",
+                             '--connect-timeout', '5', '--max-time', '10',
+                             '--proto', '=https', 'https://api.ipify.org', check=False)
+                if result.returncode == 0:
+                    candidate = ipaddress.ip_address(result.stdout.strip())
+                    if candidate.is_global:
+                        address = str(candidate)
+            except (OSError, ValueError, subprocess.SubprocessError):
+                pass
+            if self.stopping.is_set():
+                return
+            self.external_ip = address
+            if self.stopping.wait(300):
+                return
 
     def monitor_connection(self):
         if self.stopping.wait(5):
@@ -303,6 +350,8 @@ class Runtime:
             shutil.rmtree(self.work, ignore_errors=True)
             self.state = 'stopped'
             self.last_probe = None
+            self.external_ip = None
+            self.started_at = None
 
     def probe(self, url):
         from urllib.parse import urlsplit

@@ -127,6 +127,13 @@ def validate(p):
             raise ValueError(f'Недопустимое значение: {key}')
         p[key] = value
     if p['kind'] == 'checkpoint':
+        server = p['server'].strip()
+        if server.startswith('https://'):
+            parsed = urlsplit(server)
+            if parsed.path not in ('', '/') or parsed.query or parsed.fragment or parsed.username or parsed.password:
+                raise ValueError('Укажите только адрес VPN-сервера, без пути и логина')
+            server = parsed.netloc
+        p['server'] = server
         if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]{1,5})?', p['server']):
             raise ValueError('Укажите адрес Check Point без https://')
         if p.get('tunnel', 'ssl') not in ('ssl', 'ipsec'):
@@ -134,6 +141,12 @@ def validate(p):
         p['tunnel'] = p.get('tunnel', 'ssl')
         for key in ('certificate', 'ca_file'):
             p[key] = filename(p[key]) if p.get(key) else ''
+        p['auth_mode'] = p.get('auth_mode') or ('certificate' if p['certificate'] else 'password')
+        if p['auth_mode'] not in ('certificate', 'password'):
+            raise ValueError('Выберите способ входа Check Point')
+        if p['auth_mode'] == 'certificate':
+            if not p['certificate'].lower().endswith(('.p12', '.pfx')):
+                raise ValueError('Для Personal Certificate загрузите .p12 или .pfx с закрытым ключом')
     target = str(p.get('probe_url', '')).strip()
     if target and '://' not in target:
         target = 'https://' + target

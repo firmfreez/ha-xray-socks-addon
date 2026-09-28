@@ -14,6 +14,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from model import filename, ovpn_config, validate, PERSONAL
 from runtime import Runtime
 from migration import migrate
+from telemetry import Load
+from checkpoint import gateway_info
 
 ROOT = Path(os.environ.get('VPN_DATA', '/data/vpn-manager'))
 SECRET_FIELDS = ('password', 'cert_password', 'key_password', 'ovpn', 'link', 'amneziawg_config')
@@ -27,6 +29,7 @@ class Manager:
         self.runtimes = {}
         self.lock = threading.RLock()
         self.notice = ''
+        self.load = Load()
         for file in root.glob('*/profile.json'):
             p = json.loads(file.read_text())
             self.profiles[p['id']] = p
@@ -40,6 +43,7 @@ class Manager:
         result['port'] = 1080 + p['slot']
         result['dns_port'] = None if p['kind'] in PERSONAL else 10530 + p['slot']
         result['udp'] = True
+        result['metrics'] = runtime.metrics() if runtime else None
         result['probe'] = runtime.last_probe if runtime else None
         result['dns_status'] = (runtime.dns_status() if runtime
                                 and runtime.state not in ('stopped', 'error')
@@ -81,7 +85,7 @@ class Manager:
                 raise ValueError('Слишком много файлов')
             allowed = {'name', 'kind', 'slot', 'dns', 'server', 'login_type', 'username', 'password',
                        'cert_password', 'key_password', 'ovpn', 'certificate', 'ca_file', 'tunnel', 'autostart',
-                       'link', 'amneziawg_config', 'loglevel', 'watchdog_enabled', 'watchdog_urls', 'probe_url'}
+                       'link', 'amneziawg_config', 'loglevel', 'watchdog_enabled', 'watchdog_urls', 'probe_url', 'auth_mode'}
             p = validate({k: v for k, v in data.items() if k in allowed})
             if not self.port_available(1080 + p['slot']):
                 raise ValueError('Порт занят другим сервисом (TCP или UDP). Выберите свободный.')
@@ -140,11 +144,7 @@ class Manager:
             if action == 'info':
                 if p['kind'] != 'checkpoint':
                     raise ValueError('Только для Check Point')
-                args = ['snx-rs', '-m', 'info', '-s', p['server']]
-                if p.get('ca_file'):
-                    args += ['--ca-cert', str(self.root / ident / 'assets' / p['ca_file'])]
-                result = subprocess.run(args, capture_output=True, text=True, timeout=25)
-                return {'text': (result.stdout + result.stderr)[-12000:]}
+                return self.checkpoint_info({'server': p['server'], 'id': ident})
             runtime = self.runtimes.get(ident)
             if action == 'delete':
                 if runtime:
@@ -155,6 +155,14 @@ class Manager:
                 return {'ok': True}
             if action == 'start':
                 if runtime is None or runtime.state in ('stopped', 'error'):
+                    if p['kind'] == 'checkpoint' and not p['login_type']:
+                        info = self.checkpoint_info({'server': p['server'], 'id': ident})
+                        certificate = p.get('auth_mode', 'certificate' if p.get('certificate') else 'password') == 'certificate'
+                        choices = [m for m in info['methods'] if m['certificate'] == certificate]
+                        if len(choices) != 1:
+                            raise ValueError('Откройте настройки и выберите метод входа, предложенный сервером')
+                        # Use the detected choice for this connection; the saved profile stays in auto mode.
+                        p = dict(p, login_type=choices[0]['id'])
                     runtime = Runtime(p, self.root / ident)
                     self.runtimes[ident] = runtime
                     runtime.start()
@@ -164,6 +172,12 @@ class Manager:
                     runtime.stop()
                 return self.public(p)
             raise ValueError('Неизвестная операция')
+
+    def checkpoint_info(self, data):
+        server = validate(dict(name='Check Point', kind='checkpoint', server=data.get('server', '')))['server']
+        saved = self.profiles.get(data.get('id'), {})
+        ca = self.root / saved['id'] / 'assets' / saved['ca_file'] if saved.get('ca_file') else None
+        return gateway_info(server, ca)
 
 
 def handler(manager):
@@ -200,7 +214,7 @@ def handler(manager):
                 if path == '/api/ports':
                     return self.reply(200, manager.available_ports())
                 if path == '/api/status':
-                    return self.reply(200, {'notice': manager.notice})
+                    return self.reply(200, {'notice': manager.notice, 'load': manager.load.sample()})
                 if path.startswith('/api/logs/'):
                     runtime = manager.runtimes.get(path.rsplit('/', 1)[-1])
                     return self.reply(200, {'text': '\n'.join(list(runtime.logs)) if runtime else 'Профиль ещё не запускался'})
@@ -219,6 +233,8 @@ def handler(manager):
                 if not isinstance(data, dict):
                     raise ValueError('Ожидается объект JSON')
                 parts = self.path.strip('/').split('/')
+                if parts == ['api', 'checkpoint', 'info']:
+                    return self.reply(200, manager.checkpoint_info(data))
                 if parts == ['api', 'profiles']:
                     return self.reply(200, manager.save(data))
                 if len(parts) == 4 and parts[:2] == ['api', 'profiles']:

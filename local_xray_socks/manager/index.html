@@ -1,9 +1,17 @@
-<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VPN Manager</title><style>
 :root{font:15px system-ui;color:#e2e8f0;background:#0b1220;color-scheme:dark}*{box-sizing:border-box}body{margin:0 auto;max-width:1100px;padding:32px 22px}h1{font-size:30px;margin:0}h2{font-size:19px}p{color:#9baec8;line-height:1.6}.top{display:flex;justify-content:space-between;align-items:center;gap:20px}.tag{color:#5eead4;font-size:12px;letter-spacing:.08em}button{border:1px solid #344661;border-radius:8px;background:#1e304b;color:#e2e8f0;padding:10px 15px;cursor:pointer}button:disabled{opacity:.45;cursor:default}button:hover{background:#294569}button.primary{background:#0e766e;border-color:#138b80}button.danger{color:#fda4af}#cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px;margin-top:25px}.card{padding:22px;background:#142034;border:1px solid #26364e;border-radius:14px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.status{font-size:13px;color:#fcd34d}code{color:#5eead4}dialog{width:min(740px,95vw);border:1px solid #344661;border-radius:14px;background:#142034;color:#e2e8f0;padding:26px}dialog::backdrop{background:#000a}form{display:grid;gap:14px}.protocol,#cp,#ovpn{display:grid;gap:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:grid;gap:7px;font-size:13px;color:#b7c6dc}input,select,textarea{width:100%;padding:10px;background:#0c1728;color:#e2e8f0;border:1px solid #344661;border-radius:6px}textarea{font:12px ui-monospace;min-height:140px}label.check{display:flex;align-items:center}input[type=checkbox]{width:auto}small{color:#9baec8;line-height:1.5}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#091320;padding:16px;max-height:55vh;overflow:auto;font-size:12px}#notice{white-space:pre-wrap;color:#fcd34d;margin:15px 0}.hidden{display:none!important}@media(max-width:550px){.grid{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
-</style><body><div class="top"><div><div class="tag">LOCAL XRAY SOCKS · 0.7.2</div><h1>VPN Manager</h1></div><button class="primary" id="add">+ Добавить VPN</button></div>
-<p>VLESS, AmneziaWG, OpenVPN и Check Point. Каждое подключение использует свой порт SOCKS5 с TCP и UDP.</p>
-<div id="notice" role="status"></div><div id="cards"></div>
+
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;color:#dce8f5;background:#090f1a}body{max-width:1240px;padding:42px 28px;background:radial-gradient(ellipse at 90% 0%,#15384455,transparent 55%);min-height:100vh}h1{font-size:34px;letter-spacing:-1.2px;font-weight:650}.tag{font-size:11px;letter-spacing:.16em;margin-bottom:9px;color:#6ddcc3}button{transition:background .15s,border-color .15s;background:#172438;border-color:#2b3a50;font-size:12px;font-weight:550}button.primary{background:#53d5b5;color:#08261e;border-color:#53d5b5;font-size:14px;padding:12px 18px}button.primary:hover{background:#83e7cd}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #5eead4;outline-offset:3px}#cards{grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:20px}.card{background:linear-gradient(145deg,#142132,#0f1a2a);border:1px solid #26364b;padding:24px;border-radius:18px;box-shadow:0 12px 35px #0002;min-width:0}.card h2{margin:0;font-size:21px;letter-spacing:-.5px}.card p{font-size:12px;overflow-wrap:anywhere}.card-head{display:flex;justify-content:space-between;gap:12px;align-items:center}.status{font-size:11px;border-radius:20px;padding:6px 10px;background:#233044;color:#a9b8cc;white-space:nowrap}.status.online{background:#123c33;color:#7ce6c5}.status.error{background:#462930;color:#fda4af}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid #253348;border-bottom:1px solid #253348;padding:18px 0;margin:18px 0}.metric small{display:block;font-size:11px;margin-bottom:6px}.metric strong{font-size:19px;font-variant-numeric:tabular-nums;font-weight:550}.metric.wide{grid-column:1/-1}.metric.wide strong{font:16px ui-monospace,monospace;overflow-wrap:anywhere}.metric .sub{color:#8ea4bd;font-size:11px;margin-top:5px}.overview{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:30px 0}.overview>div{border:1px solid #26364b;border-radius:14px;background:#101c2c;padding:19px}.overview small{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:9px}.overview strong{font-size:25px;font-weight:550;font-variant-numeric:tabular-nums}.section-label{display:flex;justify-content:space-between;color:#92a8c1;font-size:12px;margin-top:30px}.actions{gap:7px}.actions .danger{margin-left:auto}.empty{grid-column:1/-1;text-align:center;padding:55px 20px;border:1px dashed #344661;border-radius:16px}dialog{border-radius:18px;box-shadow:0 30px 100px #0009}summary{cursor:pointer;color:#b7c6dc;font-size:13px;padding:10px 0}@media(max-width:650px){body{padding:24px 16px}.overview{grid-template-columns:1fr 1fr;gap:10px}.overview>div{padding:15px}#cards{grid-template-columns:1fr}.card{padding:19px}.card-head{align-items:flex-start}h1{font-size:29px}.section-label span:last-child{display:none}}
+
+/* Dashboard chrome and responsive navigation. */
+body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display:grid;grid-template-columns:220px minmax(0,1fr)}.sidebar{border-right:1px solid #1f2c40;padding:34px 22px;background:#0d1522;display:flex;flex-direction:column;gap:36px}.brand{display:flex;align-items:center;gap:11px;font-size:16px;font-weight:650;letter-spacing:-.3px}.brand-mark{width:35px;height:39px;display:grid;place-items:center;background:linear-gradient(145deg,#67e1c4,#298a85);color:#072e29;border-radius:11px;font-size:21px;box-shadow:0 4px 24px #44c8b51c}.brand small{display:block;color:#70849d;font-size:10px;letter-spacing:.14em;margin-top:3px}.nav-label{font-size:10px;color:#657991;letter-spacing:.13em;margin:0 12px 14px}.nav-item{padding:13px 14px;border-radius:9px;color:#7ee1c8;background:#17342f;font-size:13px;display:flex;gap:12px;align-items:center}.sidebar-foot{margin-top:auto;font-size:11px;color:#7389a2;line-height:1.8;padding:0 12px}.workspace{padding:40px 42px 30px;max-width:1450px;width:100%;margin:auto;background:radial-gradient(ellipse at 100% 0%,#163a4340,transparent 50%);min-height:100vh}.eyebrow{display:flex;align-items:center;gap:8px;color:#899fb8;font-size:11px;margin-bottom:28px}.live-dot{width:6px;height:6px;border-radius:50%;background:#5dd4b0;box-shadow:0 0 12px #5dd4b044}.top h1{font-size:32px}.intro{font-size:13px;margin:12px 0 0;color:#8ea1b9;max-width:640px}.top .tag{display:none}.overview{margin-top:30px}.overview>div{background:linear-gradient(140deg,#152235,#101a29);border-color:#223148}.overview strong{letter-spacing:-.8px}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:15px;margin:30px 0 0}.toolbar h2{font-size:16px;margin:0;letter-spacing:-.25px}.filters{display:flex;padding:4px;background:#0d1725;border:1px solid #243248;border-radius:10px;gap:3px}.filters button{padding:7px 12px;border:0;background:transparent;color:#889eb8;font-size:11px}.filters button.selected{background:#22334b;color:#e5eef9;box-shadow:0 2px 4px #0002}#cards{margin-top:18px}.card{position:relative;box-shadow:0 4px 25px #0001}.card-head h2{font-size:19px}.protocol-label{display:flex;align-items:center;gap:8px;margin-bottom:17px;font-size:10px;font-weight:600;letter-spacing:.08em;color:#8fa6bf}.protocol-icon{display:grid;place-items:center;width:26px;height:26px;border:1px solid #355064;border-radius:8px;color:#78d8c6;background:#193132;font-size:12px}.card .actions{border-top:1px solid #253348;padding-top:17px;margin-top:18px}.card .actions button{font-size:11px;padding:8px 10px}.card .actions button.connect{background:#247864;border-color:#309079;color:#ddfff5}.status:before{content:'●';font-size:7px;margin-right:5px}.metric strong{letter-spacing:-.4px}.metric small{color:#839bb6}.metric .sub{font-variant-numeric:tabular-nums}.metrics-note{font-size:10px;color:#657b96;line-height:1.5;margin-top:-8px;margin-bottom:16px}.dashboard-footer{display:flex;justify-content:space-between;gap:16px;font-size:10px;color:#667c96;margin-top:30px;padding-top:20px;border-top:1px solid #1c2a3c}.dashboard-footer span{max-width:65%}.section-label{display:none}dialog{padding:30px;background:#111d2e;max-height:90vh}dialog h2{margin:0 0 23px;font-size:23px;letter-spacing:-.6px}form{gap:18px}label{font-size:12px}input,select,textarea{border-color:#2b3b51;background:#0c1625;padding:12px;border-radius:8px}form>.actions{position:sticky;bottom:-30px;background:#111d2e;padding:16px 0;margin-bottom:0;border-top:1px solid #2b3b51}#formerror{color:#fda4af}#notice:empty{display:none}#notice:not(:empty){padding:14px 17px;border:1px solid #65522a;background:#322b1a;border-radius:10px;font-size:12px}.card:focus-within{border-color:#4c847d}
+@media(min-width:1500px){#cards{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:1050px){.shell{grid-template-columns:175px minmax(0,1fr)}.sidebar{padding:30px 15px}.workspace{padding:30px 25px}#cards{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}}@media(max-width:760px){.shell{display:block}.sidebar{padding:16px 20px;border-right:0;border-bottom:1px solid #1f2c40;flex-direction:row;align-items:center;justify-content:space-between}.sidebar nav,.sidebar-foot{display:none}.brand small{display:none}.brand-mark{width:28px;height:30px;font-size:18px}.brand{font-size:14px}.workspace{padding:24px 18px}.eyebrow{margin-bottom:20px}.top{flex-direction:row;align-items:center;gap:12px}.top h1{font-size:26px}.top button.primary{padding:11px 12px;font-size:12px}.overview{gap:10px;margin:24px 0}.overview strong{font-size:23px}.toolbar{align-items:flex-start;flex-direction:column}.filters{width:100%}.filters button{flex:1}.dashboard-footer{line-height:1.6}.dashboard-footer span{max-width:75%}#cards{grid-template-columns:1fr}dialog{padding:22px}form>.actions{bottom:-22px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body><div class="shell"><aside class="sidebar"><div class="brand"><div class="brand-mark" aria-hidden="true">⌁</div><div>Local Xray<small>NETWORK MANAGER</small></div></div><nav aria-label="Навигация"><div class="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div><div class="nav-item"><span aria-hidden="true">▦</span> Подключения</div></nav><div class="sidebar-foot">Home Assistant Add-on<br>Версия 0.7.4</div></aside><main class="workspace"><div class="eyebrow"><span class="live-dot"></span> Ваш VPN · под вашим контролем</div><div class="top"><div><div class="tag">LOCAL XRAY SOCKS · 0.7.4</div><h1>Подключения</h1></div><button class="primary" id="add">+ Добавить VPN</button></div>
+<p class="intro">Личные и рабочие сети в одном месте. Управляйте доступом, проверяйте соединения и следите за активностью.</p>
+<div id="notice" role="status"></div>
+<div class="overview" aria-label="Состояние аддона"><div><small>АКТИВНЫЕ ПРОФИЛИ</small><strong id="active_count">—</strong></div><div><small>CPU АДДОНА</small><strong id="cpu_load">—</strong></div><div><small>ПАМЯТЬ АДДОНА</small><strong id="memory_load">—</strong></div><div><small>ПРОФИЛИ</small><strong id="profile_count">—</strong></div></div>
+<div class="toolbar"><h2>Ваши сети</h2><div class="filters" aria-label="Фильтр подключений"><button class="selected" data-filter="all" aria-pressed="true">Все</button><button data-filter="active" aria-pressed="false">Активные</button><button data-filter="stopped" aria-pressed="false">Остановленные</button></div></div><div class="section-label"><span>Ваши подключения</span><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро</span></div><div id="cards"></div><footer class="dashboard-footer"><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро<br>Счётчики интерфейсов за сессию, включая служебный трафик</span><span>LOCAL XRAY / 0.7.4</span></footer></main></div>
 <dialog id="editor"><h2 id="heading">Новое подключение</h2><form id="form">
 <div class="grid"><label>Название<input name="name" required maxlength="80"></label><label>Порт SOCKS5<select name="slot"></select></label></div>
 <label>Протокол<select name="kind"><option value="vless">VLESS</option><option value="amneziawg">AmneziaWG</option><option value="openvpn">OpenVPN</option><option value="checkpoint">Check Point (snx-rs)</option></select></label>
@@ -11,10 +19,28 @@
 <div id="awg" class="protocol hidden"><label>Конфигурация AmneziaWG<textarea name="amneziawg_config" placeholder="[Interface]… [Peer]…"></textarea></label></div>
 <div id="personal" class="protocol"><label>Уровень журнала<select name="loglevel"><option value="warning">warning</option><option value="info">info</option><option value="error">error</option><option value="none">none</option><option value="debug">debug</option></select></label><label class="check"><input type="checkbox" name="watchdog_enabled" checked>Проверять доступность и переподключать VPN</label><label>URL проверки (через запятую)<input name="watchdog_urls" placeholder="По умолчанию Cloudflare и Google"></label><small>TCP и UDP доступны на выбранном порту SOCKS5.</small></div>
 <div id="ovpn"><label>Импорт .ovpn<input id="ovpnfile" type="file" accept=".ovpn,.conf"></label><label>Конфигурация<textarea name="ovpn" placeholder="Вставьте конфигурацию .ovpn."></textarea></label><label>Пароль закрытого ключа (если требуется)<input name="key_password" type="password" autocomplete="new-password"></label></div>
-<div id="cp" class="hidden"><div class="grid"><label>Сервер<input name="server" placeholder="vpn.company.example"></label><label>Туннель<select name="tunnel"><option value="ssl">SSL</option><option value="ipsec">IPsec (userspace UDP)</option></select></label></div><label>Login type<input name="login_type" placeholder="Сначала сохраните профиль и нажмите «Методы входа»"></label><div class="grid"><label>Имя файла сертификата .p12/.pfx<input name="certificate" placeholder="client.p12"></label><label>Пароль сертификата<input name="cert_password" type="password" autocomplete="new-password"></label></div><label>Имя файла корпоративного CA (необязательно)<input name="ca_file" placeholder="company-ca.pem"></label></div>
-<div id="workfields" class="protocol"><div class="grid"><label>Логин<input name="username" autocomplete="off"></label><label>Пароль<input name="password" type="password" autocomplete="new-password"></label></div>
-<label>Корпоративные DNS (IPv4 через запятую)<input name="dns" placeholder="10.20.0.53,10.20.0.54"></label><small>OpenVPN получает DNS от VPN-сервера автоматически. Заполните поле, чтобы задать DNS вручную; для Check Point это обязательно для внутренних имён.</small>
-<label>Файлы сертификатов / ключей<input id="assets" type="file" multiple></label><small id="files"></small>
+<div id="cp" class="hidden">
+<label>Адрес сервера Check Point<input name="server" placeholder="vpn.example.com"></label>
+<label>Способ входа (Authentication)<select name="auth_mode"><option value="certificate">Personal Certificate — личный сертификат</option><option value="password">Логин и пароль</option></select></label>
+<div id="cp_certificate" class="protocol">
+<label>Личный сертификат (.p12 / .pfx)<input id="cp_certfile" type="file" accept=".p12,.pfx"></label>
+<small>Выберите ваш файл .p12. Он должен содержать личный сертификат и закрытый ключ. Отдельный .cer не подходит.</small>
+<label>Сохранённый файл<input name="certificate" readonly placeholder="Сертификат ещё не выбран"></label>
+<label>Пароль от файла сертификата<input name="cert_password" type="password" autocomplete="new-password" placeholder="Пароль, с которым выдан или экспортирован .p12"></label>
+<small id="cp_password_hint">Для Personal Certificate логин и пароль учётной записи не нужны.</small>
+</div>
+<div class="actions"><button type="button" id="cp_discover">Получить методы входа с сервера</button></div>
+<label>Метод входа на сервере<select name="login_type"><option value="">Определить автоматически при подключении</option></select></label>
+<small id="cp_methods_hint">Аддон выберет метод автоматически, если сервер предлагает один подходящий вариант. Личный сертификат и пароль при запросе списка не отправляются.</small>
+<details><summary>Дополнительные настройки Check Point</summary><div class="protocol">
+<label>Туннель<select name="tunnel"><option value="ipsec">IPsec (UDP)</option><option value="ssl">SSL</option></select></label>
+<small>Если UDP недоступен в вашей сети, попробуйте SSL.</small>
+<label>Имя файла корпоративного CA (необязательно)<input name="ca_file" placeholder="company-ca.pem"></label>
+<small>Это сертификат центра, которому доверяет VPN-сервер, а не ваш личный .p12. При необходимости загрузите его ниже в дополнительных файлах и сначала сохраните профиль.</small>
+</div></details></div>
+<div id="workfields" class="protocol"><div class="grid" id="account_credentials"><label>Логин<input name="username" autocomplete="off"></label><label>Пароль<input name="password" type="password" autocomplete="new-password"></label></div>
+<label>Корпоративные DNS (IPv4 через запятую)<input name="dns" placeholder="10.20.0.53,10.20.0.54"></label><small>OpenVPN и Check Point получают DNS от VPN-сервера автоматически. Обычно оставьте поле пустым. Заполните его только для ручного выбора корпоративного DNS.</small>
+<label>Дополнительные файлы (CA, ключи OpenVPN)<input id="assets" type="file" multiple></label><small id="files"></small>
 </div><label>Сайт для проверки подключения<input name="probe_url" placeholder="Например, intranet.company.ru"><small>Проверка идёт через SOCKS этого VPN. Для VLESS и AmneziaWG пустое поле означает проверку интернета; для рабочего VPN укажите доступный через него сайт.</small></label><label class="check"><input type="checkbox" name="autostart">Подключать при запуске аддона</label>
 <small>Пустые поля паролей при редактировании сохраняют прежние значения. Файлы с тем же именем заменяются. Секреты хранятся в данных аддона и попадают в его резервную копию.</small>
 <label class="check"><input type="checkbox" id="clearsecrets">Очистить ранее сохранённые пароли</label>
@@ -29,11 +55,16 @@ async function api(path,data){
 }
 function message(t){$('#notice').textContent=t}
 function field(k){return form.elements.namedItem(k)}
-function kind(){const k=field('kind').value;for(const [id,visible]of Object.entries({cp:k==='checkpoint',ovpn:k==='openvpn',vless:k==='vless',awg:k==='amneziawg',personal:['vless','amneziawg'].includes(k),workfields:['openvpn','checkpoint'].includes(k)}))$('#'+id).classList.toggle('hidden',!visible)}
+function kind(){const k=field('kind').value;for(const [id,visible]of Object.entries({cp:k==='checkpoint',ovpn:k==='openvpn',vless:k==='vless',awg:k==='amneziawg',personal:['vless','amneziawg'].includes(k),workfields:['openvpn','checkpoint'].includes(k),cp_certificate:k==='checkpoint'&&field('auth_mode').value==='certificate',account_credentials:k==='openvpn'||(k==='checkpoint'&&field('auth_mode').value==='password')}))$('#'+id).classList.toggle('hidden',!visible)}
 async function edit(profile){
   await refresh();
   const p=profile?await api('profiles/'+profile.id+'/details',{}):null;
   editing=p?.id||null;form.reset();$('#formerror').textContent='';
+  field('login_type').replaceChildren(new Option('Определить автоматически при подключении',''));
+  if(p?.login_type)field('login_type').add(new Option(p.login_type,p.login_type));
+  field('auth_mode').value=p?(p.auth_mode||(p.certificate?'certificate':'password')):'certificate';
+  $('#cp_methods_hint').textContent='Метод можно получить с сервера или оставить автоматический выбор.';
+  $('#cp_password_hint').textContent=p?.has_secrets?.cert_password?'Пароль сертификата сохранён. Оставьте поле пустым, чтобы сохранить его.':'Для Personal Certificate логин и пароль учётной записи не нужны.';
   $('#heading').textContent=p?'Изменить подключение':'Новое подключение';
   const available=await api('ports');
   if(p&&!available.includes(p.port))available.unshift(p.port);
@@ -47,23 +78,33 @@ function btn(text,fn,cls=''){const b=document.createElement('button');b.textCont
 async function action(p,a,data={}){const r=await api('profiles/'+p.id+'/'+a,data);await refresh();return r}
 function show(text,title){$('#logtitle').textContent=title;$('#logtext').textContent=text;if(!$('#logdialog').open)$('#logdialog').showModal();$('#logbottom').hidden=!logid}
 function updateLog(text){const el=$('#logtext'),atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<30;el.textContent=text;if(atBottom)el.scrollTop=el.scrollHeight}
+let profileFilter='all';
+for(const button of document.querySelectorAll('[data-filter]'))button.onclick=()=>{profileFilter=button.dataset.filter;for(const item of document.querySelectorAll('[data-filter]')){item.classList.toggle('selected',item===button);item.setAttribute('aria-pressed',String(item===button))}refresh().catch(e=>message(e.message))};
+function bytes(value){if(value==null||!Number.isFinite(value))return '—';const units=['Б','КБ','МБ','ГБ','ТБ'];let i=0;while(value>=1024&&i<units.length-1){value/=1024;i++}return value.toFixed(i?1:0)+' '+units[i]}
+function metric(label,value,sub='',wide=false){const el=document.createElement('div');el.className='metric'+(wide?' wide':'');const l=document.createElement('small');l.textContent=label;const v=document.createElement('strong');v.textContent=value;el.append(l,v);if(sub){const d=document.createElement('div');d.className='sub';d.textContent=sub;el.append(d)}return el}
 async function refresh(){
-  profiles=await api('profiles');$('#cards').replaceChildren();
+  const [items,status]=await Promise.all([api('profiles'),api('status')]);profiles=items;$('#cards').replaceChildren();
+  $('#active_count').textContent=profiles.filter(p=>p.state==='running_unverified').length;$('#profile_count').textContent=profiles.length+' / 9';
+  $('#cpu_load').textContent=status.load?.cpu_percent==null?'—':status.load.cpu_percent.toFixed(1)+'%';$('#memory_load').textContent=bytes(status.load?.memory_bytes);
+  $('#memory_load').title=status.load?.memory_limit?'Лимит: '+bytes(status.load.memory_limit):'Потребление памяти контейнера';
   $('#add').disabled=profiles.length>=9;
-  if(!profiles.length){const p=document.createElement('p');p.textContent='Подключений пока нет. Добавьте VPN, чтобы начать.';$('#cards').append(p)}
-  for(const p of profiles){
+  if(!profiles.length){const p=document.createElement('p');p.className='empty';p.textContent='Здесь появятся ваши подключения. Добавьте первый VPN, чтобы начать.';$('#cards').append(p)}
+  const visible=profiles.filter(p=>profileFilter==='all'||(profileFilter==='active'?['running_unverified','starting'].includes(p.state):['stopped','error'].includes(p.state)));
+  if(profiles.length&&!visible.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='Нет подключений в этой категории';$('#cards').append(empty)}
+  for(const p of visible){
     const card=document.createElement('article');card.className='card';
+    const badge=document.createElement('div');badge.className='protocol-label';const icon=document.createElement('span');icon.className='protocol-icon';icon.textContent=({vless:'V',amneziawg:'A',openvpn:'O',checkpoint:'C'})[p.kind];const name=document.createElement('span');name.textContent=({vless:'VLESS',amneziawg:'AMNEZIA WG',openvpn:'OPENVPN',checkpoint:'CHECK POINT'})[p.kind];badge.append(icon,name);
     const h=document.createElement('h2');h.textContent=p.name;
-    const state=document.createElement('div');state.className='status';
+    const state=document.createElement('div');state.className='status'+(p.state==='running_unverified'?' online':p.state==='error'?' error':'');
     state.textContent=({stopped:'Остановлен',starting:'Подключается',error:'Ошибка — откройте журнал',running_unverified:'Запущен'})[p.state]||p.state;
     const info=document.createElement('p');info.textContent=({vless:'VLESS',amneziawg:'AmneziaWG',openvpn:'OpenVPN',checkpoint:'Check Point'})[p.kind]+' · SOCKS5 :'+p.port+' · TCP/UDP'+(p.dns_port?' · DNS :'+p.dns_port:'');
     const health=document.createElement('p');
     if(p.probe){health.textContent=(p.probe.reachable?'✓ Сайт доступен через VPN':'✕ Нет ответа через VPN')+' · '+new Date(p.probe.checked_at*1000).toLocaleTimeString()+'\n'+p.probe.url+(p.probe.http_status&&p.probe.http_status!=='000'?' · HTTP '+p.probe.http_status:'');health.style.whiteSpace='pre-wrap'}
     else{health.textContent=p.state==='running_unverified'?(['vless','amneziawg'].includes(p.kind)||p.probe_url?'Проверяем подключение…':'Укажите рабочий сайт в настройках для проверки связи.'):''}
     const dns=document.createElement('p');
-    if(p.dns_status){dns.textContent=p.dns_status.servers.length?'DNS: '+p.dns_status.servers.join(', ')+(p.dns_status.source==='openvpn'?' · получен от VPN':' · задан вручную'):'Корпоративный DNS пока не получен. Если туннель подключён, укажите DNS в настройках.'}
+    if(p.dns_status){dns.textContent=p.dns_status.servers.length?'DNS: '+p.dns_status.servers.join(', ')+(['openvpn','checkpoint'].includes(p.dns_status.source)?' · получен от VPN':' · задан вручную'):'Корпоративный DNS пока не получен. Если туннель подключён, укажите DNS в настройках.'}
     const a=document.createElement('div');a.className='actions';
-    const start=btn('Подключить',()=>action(p,'start'));start.disabled=!['stopped','error'].includes(p.state);
+    const start=btn('Подключить',()=>action(p,'start'),'connect');start.disabled=!['stopped','error'].includes(p.state);
     const stop=btn('Отключить',()=>action(p,'stop'));stop.disabled=p.state==='stopped';
     const check=btn('Проверить подключение',async()=>{
       if(!['vless','amneziawg'].includes(p.kind)&&!p.probe_url){await edit(p);field('probe_url').focus();return}
@@ -77,10 +118,28 @@ async function refresh(){
     }),btn('Изменить',()=>edit(p)),btn('Журнал',async()=>{logid=p.id;show((await api('logs/'+p.id)).text,'Журнал · '+p.name);$('#logtext').scrollTop=$('#logtext').scrollHeight}),check);
     if(p.kind==='checkpoint')a.append(btn('Методы входа',async()=>{logid=null;show((await action(p,'info')).text,'Методы входа Check Point')}));
     a.append(btn('Удалить',async()=>{if(confirm('Удалить профиль «'+p.name+'» вместе с сертификатами?'))await action(p,'delete')},'danger'));
-    card.append(h,state,info,dns,health,a);$('#cards').append(card);
+    const head=document.createElement('div');head.className='card-head';head.append(h,state);
+    const stats=document.createElement('div');stats.className='metrics';const m=p.metrics,t=m?.traffic;
+    const uptime=m?Math.floor(m.uptime/3600)+' ч '+Math.floor(m.uptime%3600/60)+' мин':'';
+    stats.append(metric('Внешний IP через VPN',m?.external_ip||(m?'Недоступен / определяется':'—'),m?'Сессия: '+uptime:'Подключите профиль',true),metric('Из профиля',bytes(t?.rx_bytes),t?.rx_rate==null?'—':bytes(t.rx_rate)+'/с'),metric('В профиль',bytes(t?.tx_bytes),t?.tx_rate==null?'—':bytes(t.tx_rate)+'/с'));
+    stats.title='Сетевой интерфейс профиля за текущую сессию, включая VPN-транспорт и прокси. Это не объём полезной загрузки.';
+    card.append(badge,head,info,stats,dns,health,a);$('#cards').append(card);
   }
 }
 field('kind').onchange=kind;
+field('auth_mode').onchange=()=>{field('login_type').value='';kind()};
+field('server').oninput=()=>{field('login_type').replaceChildren(new Option('Определить автоматически при подключении',''));$('#cp_methods_hint').textContent='Адрес изменён — получите методы входа заново.'};
+$('#cp_certfile').onchange=e=>{const f=e.target.files[0];if(f)field('certificate').value='personal-certificate.'+(f.name.toLowerCase().endsWith('.pfx')?'pfx':'p12')};
+$('#cp_discover').onclick=async()=>{
+  const button=$('#cp_discover');button.disabled=true;$('#cp_methods_hint').textContent='Запрашиваем доступные методы…';
+  try{
+    const r=await api('checkpoint/info',{server:field('server').value,id:editing});
+    const cert=field('auth_mode').value==='certificate', compatible=r.methods.filter(m=>m.certificate===cert);
+    field('login_type').replaceChildren(new Option('Определить автоматически при подключении',''),...compatible.map(m=>new Option(m.label+' ('+m.factors.join(', ')+')',m.id)));
+    if(compatible.length===1){field('login_type').value=compatible[0].id;$('#cp_methods_hint').textContent='Выбран '+compatible[0].label+'. '+(cert?'Теперь загрузите сертификат и сохраните профиль.':'Введите логин и пароль и сохраните профиль.')+''}
+    else{$('#cp_methods_hint').textContent=compatible.length?'Выберите нужный метод из списка.':'Сервер не предложил подходящего метода. Проверьте выбранный способ входа.'}
+  }catch(e){$('#cp_methods_hint').textContent=e.message}finally{button.disabled=false}
+};
 $('#add').onclick=()=>edit(null).catch(e=>message(e.message));
 $('#cancel').onclick=()=>$('#editor').close();
 $('#closelog').onclick=()=>{$('#logdialog').close();logid=null};
@@ -92,7 +151,9 @@ form.onsubmit=async e=>{
     const data=Object.fromEntries(new FormData(form));data.id=editing;data.slot=Number(data.slot);
     data.autostart=field('autostart').checked;data.watchdog_enabled=field('watchdog_enabled').checked;data.uploads={};
     if($('#clearsecrets').checked)data.clear_secrets=['password','cert_password','key_password'];
-    for(const file of $('#assets').files){if(file.size>1048576)throw Error('Файл больше 1 МБ');const bytes=new Uint8Array(await file.arrayBuffer());let s='';for(const b of bytes)s+=String.fromCharCode(b);data.uploads[file.name]=btoa(s)}
+    const uploads=[...$('#assets').files].map(file=>({file,name:file.name}));
+    if(data.kind==='checkpoint'&&data.auth_mode==='certificate'&&$('#cp_certfile').files[0]){const file=$('#cp_certfile').files[0];if(!/\.(p12|pfx)$/i.test(file.name))throw Error('Выберите сертификат .p12 или .pfx');uploads.push({file,name:data.certificate})}
+    for(const {file,name} of uploads){if(file.size>1048576)throw Error('Файл больше 1 МБ');const bytes=new Uint8Array(await file.arrayBuffer());let s='';for(const b of bytes)s+=String.fromCharCode(b);data.uploads[name]=btoa(s)}
     await api('profiles',data);$('#editor').close();message('Профиль сохранён');await refresh();
   }catch(e){$('#formerror').textContent=e.message}finally{button.disabled=false}
 };

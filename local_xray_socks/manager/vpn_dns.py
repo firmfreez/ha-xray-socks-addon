@@ -61,6 +61,15 @@ def read_state(path):
         return {'servers': [], 'source': 'unavailable'}
 
 
+def resolver_state(path):
+    try:
+        lines = [line.split() for line in Path(path).read_text().splitlines()]
+        servers = ipv4_servers([parts[1] for parts in lines if len(parts) == 2 and parts[0] == 'nameserver'])
+        return {'servers': servers, 'source': 'checkpoint' if servers else 'waiting'}
+    except OSError:
+        return {'servers': [], 'source': 'unavailable'}
+
+
 def update(work, env):
     work = Path(work)
     if env.get('script_type') in ('down', 'dns-down', 'route-pre-down'):

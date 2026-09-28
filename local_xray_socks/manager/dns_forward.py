@@ -8,10 +8,12 @@ import socketserver
 import struct
 import sys
 import threading
-from vpn_dns import read_state
+from vpn_dns import read_state, resolver_state
 
 
 def upstream_servers(value):
+    if value.startswith('resolv:'):
+        return resolver_state(value[7:])['servers']
     if value.startswith('@'):
         return read_state(value[1:])['servers']
     return [x for x in value.split(',') if x]

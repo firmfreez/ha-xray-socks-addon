@@ -1,3 +1,10 @@
+# 0.7.4
+
+- Add a dedicated Personal Certificate setup with .p12/.pfx upload.
+- Discover gateway login methods and automatically select a unique matching method.
+- Apply Check Point DNS in a private resolver without changing container DNS.
+- Keep manual DNS overrides and separate certificate/password authentication.
+
 # 0.7.3
 
 - Apply OpenVPN-provided IPv4 DNS automatically when the tunnel connects.

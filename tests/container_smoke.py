@@ -63,18 +63,20 @@ def udp_fetch(port, host, target_port, payload=b'udp-through-vpn'):
             return response
 
 
-def synthetic_tunnel(base):
+def synthetic_tunnel(base, kind="openvpn"):
     bindir = base / 'bin'
-    bindir.mkdir()
-    stub = bindir / 'openvpn'
-    stub.write_text('#!/bin/sh\nexec sleep 120\n')
+    bindir.mkdir(parents=True)
+    stub = bindir / ('openvpn' if kind == 'openvpn' else 'snx-rs')
+    stub.write_text('#!/bin/sh\n'+("printf 'nameserver 10.250.0.1\\n' > /etc/resolv.conf\n" if kind == 'checkpoint' else '')+'exec sleep 120\n')
     stub.chmod(0o755)
     original_path = os.environ['PATH']
     os.environ['PATH'] = str(bindir) + ':' + original_path
     directory = base / 'work'
     (directory / 'assets').mkdir(parents=True)
-    profile = validate(dict(name='Synthetic work', kind='openvpn', slot=1,
-                            ovpn='client\ndev tun\n', dns='10.250.0.1'))
+    profile = validate(dict(name='Synthetic work', kind=kind, slot=1,
+                            ovpn='client\ndev tun\n', dns='10.250.0.1' if kind == 'openvpn' else '',
+                            server='127.0.0.1', login_type='vpn_Test'))
+    original_resolver = Path('/etc/resolv.conf').read_text()
     runtime = Runtime(profile, directory)
 
     class Handler(BaseHTTPRequestHandler):
@@ -88,19 +90,28 @@ def synthetic_tunnel(base):
 
     echo = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     echo.bind(('0.0.0.0', 18081))
+    echo.settimeout(0.2)
+    echo_stop = threading.Event()
     def echo_udp():
         try:
-            while True:
-                data, peer = echo.recvfrom(65535)
+            while not echo_stop.is_set():
+                try:
+                    data, peer = echo.recvfrom(65535)
+                except socket.timeout:
+                    continue
                 echo.sendto(data, peer)
         except OSError:
             pass
-    threading.Thread(target=echo_udp, daemon=True).start()
+    echo_thread = threading.Thread(target=echo_udp, daemon=True)
+    echo_thread.start()
     http = ThreadingHTTPServer(('0.0.0.0', 18080), Handler)
     threading.Thread(target=http.serve_forever, daemon=True).start()
     try:
         runtime.start()
         wait_port(1081, runtime)
+        if kind == 'checkpoint':
+            assert runtime.dns_status()['servers'] == ['10.250.0.1']
+            assert Path('/etc/resolv.conf').read_text() == original_resolver, 'Check Point changed container DNS'
         # The root transport can reach the physical interface, SOCKS must not.
         run('ip', 'netns', 'exec', runtime.ns, 'curl', '--fail', '--max-time', '3',
             f'http://{runtime.gateway}:18080')
@@ -123,10 +134,12 @@ def synthetic_tunnel(base):
             pass
         else:
             raise AssertionError('UDP bypassed the absent VPN')
-        print('PASS: TCP and UDP through SOCKS, namespace routing and tunnel-loss egress block', flush=True)
+        print('PASS: '+kind+' TCP/UDP, namespace routing, DNS isolation and tunnel-loss egress block', flush=True)
     finally:
         print('\n'.join(runtime.logs), flush=True)
         runtime.stop()
+        echo_stop.set()
+        echo_thread.join(timeout=1)
         echo.close()
         http.shutdown()
         http.server_close()
@@ -202,5 +215,6 @@ if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp)
         synthetic_tunnel(base)
+        synthetic_tunnel(base / 'checkpoint', kind='checkpoint')
         primary_xray(base)
         isolated_awg(base)
