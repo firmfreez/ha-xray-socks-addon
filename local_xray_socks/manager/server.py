@@ -41,6 +41,9 @@ class Manager:
         result['dns_port'] = None if p['kind'] in PERSONAL else 10530 + p['slot']
         result['udp'] = True
         result['probe'] = runtime.last_probe if runtime else None
+        result['dns_status'] = (runtime.dns_status() if runtime
+                                and runtime.state not in ('stopped', 'error')
+                                and p['kind'] not in PERSONAL else None)
         return result
 
     @staticmethod

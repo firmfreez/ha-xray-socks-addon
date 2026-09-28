@@ -13,6 +13,7 @@ import threading
 import time
 
 from model import ovpn_config, PERSONAL, personal_options
+from vpn_dns import publish, read_state
 
 NETNS_ROOT = Path('/etc/netns')
 HOSTS_FILE = Path('/etc/hosts')
@@ -151,15 +152,24 @@ class Runtime:
             # Each process gets its own mount namespace. Only the SOCKS resolver
             # uses corporate DNS; VPN endpoint resolution keeps the container DNS.
             dns = self.p['dns'].split(',') if self.p['dns'] else []
-            resolver = self.write('resolv.conf', ''.join(f'nameserver {x}\n' for x in dns) + 'options timeout:2 attempts:2\n')
-            Path(resolver).chmod(0o644)  # Readable by the unprivileged SOCKS process.
+            publish(self.work, dns, 'manual' if dns else 'waiting')
+            resolver = str(self.work / 'resolv.conf')
             if self.p['kind'] == 'openvpn':
                 config = ovpn_config(self.p['ovpn'], {p.name for p in (self.directory / 'assets').iterdir()})
                 config = config.replace('/run/work-vpn/assets/', str(self.directory / 'assets') + '/')
                 config = config.replace('/run/work-vpn/auth.txt', str(self.work / 'auth.txt'))
                 self.write('auth.txt', self.p['username'] + '\n' + self.p['password'] + '\n')
                 conf = self.write('client.ovpn', config)
-                args = ['openvpn', '--config', conf, '--dev', 'tun', '--script-security', '1', '--verb', '3', '--auth-retry', 'none']
+                self.write('dns-manual', self.p['dns'])
+                # OpenVPN 2.7 converts legacy dhcp-option DNS to dns_server_*.
+                # Only this manager-owned hook can execute; imports reject scripts.
+                hook = self.write('dns-hook', '#!/usr/bin/python3\nimport os, sys\n'
+                                  'sys.path.insert(0, "/app")\nfrom vpn_dns import update\n'
+                                  f'update({str(self.work)!r}, os.environ)\n')
+                Path(hook).chmod(0o755)
+                args = ['openvpn', '--config', conf, '--dev', 'tun', '--script-security', '2',
+                        '--dns-updown', hook, '--down', hook,
+                        '--up-restart', '--verb', '3', '--auth-retry', 'none']
                 if self.p.get('key_password'):
                     args += ['--askpass', self.write('key-password', self.p['key_password'] + '\n')]
             else:
@@ -192,7 +202,8 @@ class Runtime:
                 'socks', resolver, socks_conf], log=False)
             self.start_bridge()
             self.spawn(ns + ['setpriv', '--reuid=65534', '--regid=65534', '--clear-groups',
-                            'python3', '/app/dns_forward.py', self.peer, self.p['dns']], log=False)
+                            'python3', '/app/dns_forward.py', self.peer,
+                            '@' + str(self.work / 'dns-state.json')], log=False)
             for incoming, outgoing in [('TCP4-LISTEN', 'TCP4'), ('UDP4-RECVFROM', 'UDP4')]:
                 self.spawn(['socat', '-T', '10', f"{incoming}:{10530 + self.p['slot']},fork,reuseaddr", f'{outgoing}:{self.peer}:5353'], log=False)
             self.started()
@@ -208,6 +219,9 @@ class Runtime:
                 'inbounds': [{'listen': address, 'port': 1080 + self.p['slot'],
                               'protocol': 'socks', 'settings': {'auth': 'noauth', 'udp': True, 'ip': address}}],
                 'outbounds': [outbound]}
+
+    def dns_status(self):
+        return read_state(self.work / 'dns-state.json')
 
     def start_bridge(self):
         config = self.socks_config('0.0.0.0', {

@@ -7,11 +7,16 @@ Home Assistant add-on repository with a local Xray-based SOCKS5 proxy for Raspbe
 - `local_xray_socks`: Runs Xray inside a Home Assistant add-on container and exposes a SOCKS5 port for LAN clients such as Keenetic.
 
 
-## Upgrade to 0.7.2
+## Upgrade to 0.7.3
 
 Manage VLESS, AmneziaWG, OpenVPN and Check Point in the **VPN Manager** Ingress
 panel. Saved configurations can be viewed and edited. The obsolete HA options
 form is hidden; existing profiles and one-time migration of old settings are retained.
+
+OpenVPN automatically applies the DNS supplied by the server, refreshes it on
+reconnect, and displays the effective DNS in the panel. An explicit corporate
+DNS setting overrides it. LAN clients still need domain-specific DNS forwarding
+to the profile’s published DNS port.
 
 Assign any VPN type to any free SOCKS port from 1080–1088. Every port supports
 TCP and UDP. The panel offers a one-click connection check and displays its

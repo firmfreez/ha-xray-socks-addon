@@ -8,6 +8,13 @@ import socketserver
 import struct
 import sys
 import threading
+from vpn_dns import read_state
+
+
+def upstream_servers(value):
+    if value.startswith('@'):
+        return read_state(value[1:])['servers']
+    return [x for x in value.split(',') if x]
 
 
 def read_exact(sock, size):
@@ -71,13 +78,12 @@ class TCPServer(socketserver.ThreadingTCPServer):
 def main():
     address, dns = sys.argv[1:3]
     port = int(sys.argv[3]) if len(sys.argv) > 3 else 5353
-    upstreams = [x for x in dns.split(',') if x]
 
     class UDP(socketserver.BaseRequestHandler):
         def handle(self):
             query, sock = self.request
             try:
-                answer = forward(query, upstreams)
+                answer = forward(query, upstream_servers(dns))
                 if len(answer) > 512:
                     answer = minimal_reply(query, truncated=True)
                 sock.sendto(answer, self.client_address)
@@ -90,7 +96,7 @@ def main():
             try:
                 while True:
                     size = struct.unpack('!H', read_exact(self.request, 2))[0]
-                    answer = forward(read_exact(self.request, size), upstreams)
+                    answer = forward(read_exact(self.request, size), upstream_servers(dns))
                     self.request.sendall(struct.pack('!H', len(answer)) + answer)
             except (OSError, ValueError):
                 pass

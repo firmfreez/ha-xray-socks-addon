@@ -13,7 +13,7 @@
 <div id="ovpn"><label>Импорт .ovpn<input id="ovpnfile" type="file" accept=".ovpn,.conf"></label><label>Конфигурация<textarea name="ovpn" placeholder="Вставьте конфигурацию .ovpn."></textarea></label><label>Пароль закрытого ключа (если требуется)<input name="key_password" type="password" autocomplete="new-password"></label></div>
 <div id="cp" class="hidden"><div class="grid"><label>Сервер<input name="server" placeholder="vpn.company.example"></label><label>Туннель<select name="tunnel"><option value="ssl">SSL</option><option value="ipsec">IPsec (userspace UDP)</option></select></label></div><label>Login type<input name="login_type" placeholder="Сначала сохраните профиль и нажмите «Методы входа»"></label><div class="grid"><label>Имя файла сертификата .p12/.pfx<input name="certificate" placeholder="client.p12"></label><label>Пароль сертификата<input name="cert_password" type="password" autocomplete="new-password"></label></div><label>Имя файла корпоративного CA (необязательно)<input name="ca_file" placeholder="company-ca.pem"></label></div>
 <div id="workfields" class="protocol"><div class="grid"><label>Логин<input name="username" autocomplete="off"></label><label>Пароль<input name="password" type="password" autocomplete="new-password"></label></div>
-<label>Корпоративные DNS (IPv4 через запятую)<input name="dns" placeholder="10.20.0.53,10.20.0.54"></label><small>Нужны для имён внутренних сайтов. Без DNS можно проверять доступ по IP. DNS самого VPN-сервера обрабатывается отдельно.</small>
+<label>Корпоративные DNS (IPv4 через запятую)<input name="dns" placeholder="10.20.0.53,10.20.0.54"></label><small>OpenVPN получает DNS от VPN-сервера автоматически. Заполните поле, чтобы задать DNS вручную; для Check Point это обязательно для внутренних имён.</small>
 <label>Файлы сертификатов / ключей<input id="assets" type="file" multiple></label><small id="files"></small>
 </div><label>Сайт для проверки подключения<input name="probe_url" placeholder="Например, intranet.company.ru"><small>Проверка идёт через SOCKS этого VPN. Для VLESS и AmneziaWG пустое поле означает проверку интернета; для рабочего VPN укажите доступный через него сайт.</small></label><label class="check"><input type="checkbox" name="autostart">Подключать при запуске аддона</label>
 <small>Пустые поля паролей при редактировании сохраняют прежние значения. Файлы с тем же именем заменяются. Секреты хранятся в данных аддона и попадают в его резервную копию.</small>
@@ -60,6 +60,8 @@ async function refresh(){
     const health=document.createElement('p');
     if(p.probe){health.textContent=(p.probe.reachable?'✓ Сайт доступен через VPN':'✕ Нет ответа через VPN')+' · '+new Date(p.probe.checked_at*1000).toLocaleTimeString()+'\n'+p.probe.url+(p.probe.http_status&&p.probe.http_status!=='000'?' · HTTP '+p.probe.http_status:'');health.style.whiteSpace='pre-wrap'}
     else{health.textContent=p.state==='running_unverified'?(['vless','amneziawg'].includes(p.kind)||p.probe_url?'Проверяем подключение…':'Укажите рабочий сайт в настройках для проверки связи.'):''}
+    const dns=document.createElement('p');
+    if(p.dns_status){dns.textContent=p.dns_status.servers.length?'DNS: '+p.dns_status.servers.join(', ')+(p.dns_status.source==='openvpn'?' · получен от VPN':' · задан вручную'):'Корпоративный DNS пока не получен. Если туннель подключён, укажите DNS в настройках.'}
     const a=document.createElement('div');a.className='actions';
     const start=btn('Подключить',()=>action(p,'start'));start.disabled=!['stopped','error'].includes(p.state);
     const stop=btn('Отключить',()=>action(p,'stop'));stop.disabled=p.state==='stopped';
@@ -75,7 +77,7 @@ async function refresh(){
     }),btn('Изменить',()=>edit(p)),btn('Журнал',async()=>{logid=p.id;show((await api('logs/'+p.id)).text,'Журнал · '+p.name);$('#logtext').scrollTop=$('#logtext').scrollHeight}),check);
     if(p.kind==='checkpoint')a.append(btn('Методы входа',async()=>{logid=null;show((await action(p,'info')).text,'Методы входа Check Point')}));
     a.append(btn('Удалить',async()=>{if(confirm('Удалить профиль «'+p.name+'» вместе с сертификатами?'))await action(p,'delete')},'danger'));
-    card.append(h,state,info,health,a);$('#cards').append(card);
+    card.append(h,state,info,dns,health,a);$('#cards').append(card);
   }
 }
 field('kind').onchange=kind;

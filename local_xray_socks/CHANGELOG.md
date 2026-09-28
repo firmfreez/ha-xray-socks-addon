@@ -1,3 +1,9 @@
+# 0.7.3
+
+- Apply OpenVPN-provided IPv4 DNS automatically when the tunnel connects.
+- Refresh SOCKS and LAN DNS forwarding on reconnect; manual DNS takes precedence.
+- Show effective corporate DNS in the panel and fail closed when it is absent.
+
 # 0.7.2
 
 - Accept explicit `tls-client` OpenVPN configurations.
