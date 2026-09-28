@@ -30,7 +30,7 @@ cleanup_runtime() {
     if [ -n "${AWG_SEND_THROUGH_V6:-}" ]; then
       ip -6 rule del from "${AWG_SEND_THROUGH_V6}" table 51820 priority 10000 2>/dev/null || true
     fi
-    ip link delete awg0 2>/dev/null || true
+    ip link delete "${AWG_INTERFACE:-awg0}" 2>/dev/null || true
   fi
 }
 
@@ -80,8 +80,8 @@ supervise_runtime() {
       if [ "${failures}" -ge 3 ]; then
         if [ "${PROTOCOL}" = amneziawg ]; then
           bashio::log.warning "AmneziaWG latest handshake and transfer counters:"
-          timeout 3 awg show awg0 latest-handshakes || true
-          timeout 3 awg show awg0 transfer || true
+          timeout 3 awg show "${AWG_INTERFACE:-awg0}" latest-handshakes || true
+          timeout 3 awg show "${AWG_INTERFACE:-awg0}" transfer || true
         fi
         return
       fi

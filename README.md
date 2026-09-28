@@ -6,6 +6,23 @@ Home Assistant add-on repository with a local Xray-based SOCKS5 proxy for Raspbe
 
 - `local_xray_socks`: Runs Xray inside a Home Assistant add-on container and exposes a SOCKS5 port for LAN clients such as Keenetic.
 
+
+## Upgrade to 0.6.0
+
+The existing `local_xray_socks` add-on now includes a single **VPN Manager**
+Ingress panel for VLESS, AmneziaWG, OpenVPN and Check Point. Its slug and primary
+port 1080 are unchanged. Update the existing installation from the same repository;
+do not uninstall it or install a second add-on.
+
+On first launch, legacy options are imported once into named profiles. The active
+connection keeps 1080 and autostarts; other saved profiles remain stopped.
+After migration, use the panel to manage settings. Legacy YAML options below
+remain for migration compatibility only.
+
+The implementation is experimental: unit tests pass, but the ARM64 image and
+HA OS networking have not yet been verified. See [upgrade and setup instructions](local_xray_socks/DOCS.md),
+including new permissions, backup, DNS and protocol limitations.
+
 ## Add Repository To Home Assistant
 
 In Home Assistant, open:
@@ -16,9 +33,9 @@ Add the Git repository URL:
 
 `https://github.com/firmfreez/ha-xray-socks-addon`
 
-After that, install `Local Xray SOCKS`, choose the protocol, paste the matching connection settings, and start the add-on.
+After that, install `Local Xray SOCKS`, start the add-on, open its Web UI, and add a named connection. Existing installations should use Update instead of reinstalling.
 
-## Add-on Options
+## Legacy Add-on Options (0.5.x / one-time migration)
 
 - `protocol`: `vless` or `amneziawg`
 - `link`: Full `vless://...` URI. Used when `protocol` is `vless`.

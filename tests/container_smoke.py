@@ -1,0 +1,153 @@
+"""Run explicitly INSIDE the ARM64 image, never against real VPNs or HA data.
+
+Exercise the actual namespaces, SOCKS relay and egress firewall using a synthetic
+tunnel. OpenVPN auth is deliberately replaced with a sleeping test process.
+The actual Xray primary listener and isolated AWG engine are started separately.
+"""
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import os
+from pathlib import Path
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+
+sys.path.insert(0, '/app')
+from model import validate
+from runtime import Runtime, run
+
+
+def wait_port(port, runtime):
+    deadline = time.monotonic() + 35
+    while time.monotonic() < deadline:
+        assert runtime.state != 'error', '\n'.join(runtime.logs)
+        try:
+            with socket.create_connection(('127.0.0.1', port), timeout=1):
+                return
+        except OSError:
+            time.sleep(.25)
+    raise AssertionError(f'No listener on {port}: ' + '\n'.join(runtime.logs))
+
+
+def fetch(port, url):
+    return subprocess.run(['curl', '--silent', '--show-error', '--noproxy', '',
+                           '--proxy', f'socks5h://127.0.0.1:{port}', '--max-time', '4', url],
+                          text=True, capture_output=True, timeout=6)
+
+
+def synthetic_tunnel(base):
+    bindir = base / 'bin'
+    bindir.mkdir()
+    stub = bindir / 'openvpn'
+    stub.write_text('#!/bin/sh\nexec sleep 120\n')
+    stub.chmod(0o755)
+    original_path = os.environ['PATH']
+    os.environ['PATH'] = str(bindir) + ':' + original_path
+    directory = base / 'work'
+    (directory / 'assets').mkdir(parents=True)
+    profile = validate(dict(name='Synthetic work', kind='openvpn', slot=1,
+                            ovpn='client\ndev tun\n', dns='10.250.0.1'))
+    runtime = Runtime(profile, directory)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'synthetic-work-resource')
+
+        def log_message(self, *_):
+            pass
+
+    http = ThreadingHTTPServer(('0.0.0.0', 18080), Handler)
+    threading.Thread(target=http.serve_forever, daemon=True).start()
+    try:
+        runtime.start()
+        wait_port(1081, runtime)
+        # The root transport can reach the physical interface, SOCKS must not.
+        run('ip', 'netns', 'exec', runtime.ns, 'curl', '--fail', '--max-time', '3',
+            f'http://{runtime.gateway}:18080')
+        blocked = fetch(1081, f'http://{runtime.gateway}:18080')
+        assert blocked.returncode != 0, 'SOCKS bypassed the absent VPN'
+        # A second veth emulates a tunnel route to the synthetic corporate host.
+        run('ip', 'link', 'add', 'testvpn', 'type', 'veth', 'peer', 'name', 'tun-test', 'netns', runtime.ns)
+        run('ip', 'addr', 'add', '10.250.0.1/30', 'dev', 'testvpn')
+        run('ip', 'link', 'set', 'testvpn', 'up')
+        run('ip', 'netns', 'exec', runtime.ns, 'ip', 'addr', 'add', '10.250.0.2/30', 'dev', 'tun-test')
+        run('ip', 'netns', 'exec', runtime.ns, 'ip', 'link', 'set', 'tun-test', 'up')
+        response = fetch(1081, 'http://10.250.0.1:18080')
+        assert response.returncode == 0 and response.stdout == 'synthetic-work-resource', response.stderr
+        run('ip', 'link', 'delete', 'testvpn')
+        assert fetch(1081, 'http://10.250.0.1:18080').returncode != 0, 'Tunnel loss leaked traffic'
+        print('PASS: actual SOCKS relay, namespace routing and tunnel-loss egress block', flush=True)
+    finally:
+        print('\n'.join(runtime.logs), flush=True)
+        runtime.stop()
+        http.shutdown()
+        http.server_close()
+        os.environ['PATH'] = original_path
+
+
+def primary_xray(base):
+    profile = validate(dict(name='Synthetic primary', kind='vless', slot=0,
+                            link='vless://12345678-1234-4234-9234-123456789abc@127.0.0.1:9',
+                            watchdog_enabled=False))
+    runtime = Runtime(profile, base)
+    try:
+        runtime.start()
+        wait_port(1080, runtime)
+        with socket.create_connection(('127.0.0.1', 1080), timeout=3) as sock:
+            sock.sendall(b'\x05\x01\x00')
+            assert sock.recv(2) == b'\x05\x00', 'Primary Xray SOCKS handshake failed'
+        config = json.loads((runtime.work / 'xray/config.json').read_text())
+        assert config['inbounds'][0]['settings']['udp'] is True
+        print('PASS: original Xray runner, private options and primary TCP/UDP configuration', flush=True)
+    finally:
+        print('\n'.join(runtime.logs), flush=True)
+        runtime.stop()
+
+
+def isolated_awg(base):
+    private = run('awg', 'genkey').stdout.strip()
+    other_private = run('awg', 'genkey').stdout
+    public = subprocess.run(['awg', 'pubkey'], input=other_private, text=True, capture_output=True, check=True).stdout.strip()
+    config = (f'[Interface]\nPrivateKey = {private}\nAddress = 10.99.0.2/32\n'
+              f'[Peer]\nPublicKey = {public}\nEndpoint = 127.0.0.1:9\nAllowedIPs = 0.0.0.0/0\n')
+    profile = validate(dict(name='Synthetic AWG', kind='amneziawg', slot=2,
+                            amneziawg_config=config, watchdog_enabled=False))
+    runtime = Runtime(profile, base)
+    try:
+        runtime.start()
+        deadline = time.monotonic() + 35
+        while time.monotonic() < deadline:
+            assert runtime.state != 'error', '\n'.join(runtime.logs)
+            try:
+                with socket.create_connection(('127.0.0.1', 1082), timeout=1) as sock:
+                    sock.settimeout(1)
+                    sock.sendall(b'\x05\x01\x00')
+                    if sock.recv(2) == b'\x05\x00':
+                        break
+            except OSError:
+                pass
+            time.sleep(.5)
+        else:
+            raise AssertionError('Isolated AWG/Xray did not start: ' + '\n'.join(runtime.logs))
+        run('ip', 'netns', 'exec', runtime.ns, 'ip', 'link', 'show', 'awg2')
+        print('PASS: real AWG userspace interface and isolated Xray SOCKS handshake', flush=True)
+    finally:
+        print('\n'.join(runtime.logs), flush=True)
+        runtime.stop()
+
+
+if __name__ == '__main__':
+    assert sys.platform == 'linux' and Path('/app/server.py').exists(), 'Run only in the built container'
+    os.umask(0o077)
+    run('snx-rs', '--version')
+    run('openvpn', '--version')
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        synthetic_tunnel(base)
+        primary_xray(base)
+        isolated_awg(base)

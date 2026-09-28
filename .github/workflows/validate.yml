@@ -1,0 +1,27 @@
+name: Validate ARM64 add-on
+on:
+  push:
+    branches: [main, 'release/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests and shell syntax
+        run: |
+          python3 -B -m unittest discover -s tests -v
+          bash -n local_xray_socks/run.sh local_xray_socks/supervise.sh local_xray_socks/snx-rs.sh
+          git diff --check
+      - name: Build native ARM64 image
+        run: docker build --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=0.6.0 -t local-xray-socks:ci local_xray_socks
+      - name: Network and process smoke tests (synthetic endpoints only)
+        run: |
+          test -c /dev/net/tun || (sudo mkdir -p /dev/net && sudo mknod /dev/net/tun c 10 200)
+          docker run --rm --cap-add NET_ADMIN --cap-add SYS_ADMIN \
+            --security-opt apparmor=unconfined --device /dev/net/tun \
+            -v "$PWD/tests:/validation:ro" local-xray-socks:ci \
+            python3 -B /validation/container_smoke.py

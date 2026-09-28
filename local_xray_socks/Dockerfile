@@ -1,4 +1,17 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/base:latest
+# Private glibc loader for the pinned ARM64 Check Point binary. The established
+# HA Alpine base and Xray/AmneziaWG toolchain remain unchanged.
+FROM debian:trixie-slim AS checkpoint
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl xz-utils libgcc-s1 \
+    && curl -fL --retry 3 https://github.com/ancwrd1/snx-rs/releases/download/v6.4.1/snx-rs-v6.4.1-linux-arm64.tar.xz -o /tmp/snx.tar.xz \
+    && echo '1e7fb8c3f528afe389fd3ae80e0a601b379bef6526e990eb1ea5203457d438ac  /tmp/snx.tar.xz' | sha256sum -c - \
+    && tar -xJf /tmp/snx.tar.xz -C /tmp \
+    && mkdir -p /bundle/lib \
+    && cp /tmp/snx-rs-v6.4.1-linux-arm64/snx-rs /bundle/snx-rs \
+    && cp /lib/aarch64-linux-gnu/ld-linux-aarch64.so.1 /lib/aarch64-linux-gnu/libc.so.6 \
+          /lib/aarch64-linux-gnu/libm.so.6 /lib/aarch64-linux-gnu/libgcc_s.so.1 /bundle/lib/ \
+    && /bundle/snx-rs --version
+
 FROM ${BUILD_FROM}
 
 ARG BUILD_ARCH
@@ -9,7 +22,7 @@ LABEL \
   io.hass.type="app" \
   io.hass.arch="${BUILD_ARCH}"
 
-RUN apk add --no-cache curl unzip jq bash iproute2 openresolv
+RUN apk add --no-cache curl unzip jq bash iproute2 openresolv python3 openvpn microsocks socat iptables util-linux
 
 # Keep the engine and its userspace configuration tools on compatible AWG 3.1
 # revisions. The tools project did not publish an AWG 3.1 tag yet, so pin the
@@ -45,4 +58,9 @@ COPY run.sh /run.sh
 COPY supervise.sh /supervise.sh
 RUN chmod a+x /run.sh
 
-CMD [ "/run.sh" ]
+COPY --from=checkpoint /bundle /opt/checkpoint
+COPY snx-rs.sh /usr/local/bin/snx-rs
+COPY manager /app
+RUN chmod 755 /usr/local/bin/snx-rs && snx-rs --version
+
+CMD [ "/usr/bin/with-contenv", "python3", "/app/server.py" ]

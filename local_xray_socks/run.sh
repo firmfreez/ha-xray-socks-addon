@@ -2,6 +2,19 @@
 set -euo pipefail
 umask 077
 source /supervise.sh
+# Standalone defaults retain the 0.5.x behaviour; the manager supplies per-profile paths.
+VPN_RUNTIME_DIR="${VPN_RUNTIME_DIR:-/tmp}"
+AWG_INTERFACE="${AWG_INTERFACE:-awg0}"
+AWG_DIR="${VPN_RUNTIME_DIR}/amneziawg"
+XRAY_DIR="${VPN_RUNTIME_DIR}/xray"
+mkdir -p "${AWG_DIR}" "${XRAY_DIR}"
+profile_config() {
+  if [ -n "${VPN_OPTIONS_FILE:-}" ]; then
+    jq -r --arg key "$1" 'if has($key) then .[$key] else "" end' "${VPN_OPTIONS_FILE}"
+  else
+    bashio::config "$1"
+  fi
+}
 XRAY_PID=""
 AWG_PID=""
 trap cleanup_runtime EXIT
@@ -136,20 +149,20 @@ parse_amneziawg_config() {
     fi
   fi
 
-  mkdir -p /tmp/amneziawg
+  mkdir -p "${AWG_DIR}"
   printf '%s\n' "${config}" | awk '
     /^\047?[[:space:]]*\[Interface\][[:space:]]*\047?$/ { found=1 }
     found {
       gsub(/^\047|^\042|\047$|\042$/, "")
       print
     }
-  ' > /tmp/amneziawg/client.conf
+  ' > "${AWG_DIR}/client.conf"
 
-  if [ ! -s /tmp/amneziawg/client.conf ]; then
-    printf '%s\n' "${config}" > /tmp/amneziawg/client.conf
+  if [ ! -s "${AWG_DIR}/client.conf" ]; then
+    printf '%s\n' "${config}" > "${AWG_DIR}/client.conf"
   fi
 
-  parsed_file="/tmp/amneziawg/parsed.tsv"
+  parsed_file="${AWG_DIR}/parsed.tsv"
 
   awk '
     function trim(s) {
@@ -170,7 +183,7 @@ parse_amneziawg_config() {
       value=trim(substr($0, pos + 1))
       print section "\t" key "\t" value
     }
-  ' /tmp/amneziawg/client.conf > "${parsed_file}"
+  ' "${AWG_DIR}/client.conf" > "${parsed_file}"
 
   while IFS=$'\t' read -r section key value; do
     case "${section}:${key}" in
@@ -226,7 +239,7 @@ parse_amneziawg_config() {
         }
         count++
       }
-    ' /tmp/amneziawg/client.conf | tr "\n" " " | cut -c1-240)"
+    ' "${AWG_DIR}/client.conf" | tr "\n" " " | cut -c1-240)"
     bashio::log.warning "Received AmneziaWG config preview: ${received_preview}"
     bashio::log.fatal "Option 'amneziawg_config' does not contain Interface.PrivateKey"
     exit 1
@@ -315,7 +328,7 @@ append_awg_option() {
   local value="$2"
 
   if [ -n "${value}" ]; then
-    printf '%s = %s\n' "${key}" "${value}" >> /tmp/amneziawg/awg0.conf
+    printf '%s = %s\n' "${key}" "${value}" >> "${AWG_DIR}/${AWG_INTERFACE}.conf"
   fi
 }
 
@@ -348,8 +361,8 @@ route_endpoint_via_original_default() {
 create_amneziawg_interface() {
   local engine_version
 
-  if ip link show awg0 >/dev/null 2>&1; then
-    ip link delete awg0 || true
+  if ip link show ${AWG_INTERFACE} >/dev/null 2>&1; then
+    ip link delete ${AWG_INTERFACE} || true
   fi
 
   # The Home Assistant host may expose an older kernel module which can create
@@ -357,16 +370,16 @@ create_amneziawg_interface() {
   # userspace engine shipped in this image.
   engine_version="$(amneziawg-go --version 2>/dev/null | head -n 1 || true)"
   bashio::log.info "AmneziaWG engine: ${engine_version:-version unavailable}"
-  bashio::log.info "Creating AmneziaWG userspace interface awg0 for protocol profile ${AWG_CONFIG_VERSION}"
-  LOG_LEVEL="${LOGLEVEL}" amneziawg-go --foreground awg0 &
+  bashio::log.info "Creating AmneziaWG userspace interface ${AWG_INTERFACE} for protocol profile ${AWG_CONFIG_VERSION}"
+  LOG_LEVEL="${LOGLEVEL}" amneziawg-go --foreground ${AWG_INTERFACE} &
   AWG_PID=$!
 }
 
 log_amneziawg_state() {
   bashio::log.info "AmneziaWG interface state:"
-  ip address show dev awg0 || true
+  ip address show dev ${AWG_INTERFACE} || true
   bashio::log.info "AmneziaWG peer state:"
-  awg show awg0 || true
+  awg show ${AWG_INTERFACE} || true
   bashio::log.info "IPv4 routes:"
   ip route show || true
   bashio::log.info "IPv4 AWG policy routes:"
@@ -385,7 +398,7 @@ wait_for_amneziawg_handshake() {
   local i latest_handshake transfer_line
 
   for i in $(seq 1 20); do
-    latest_handshake="$(awg show awg0 latest-handshakes 2>/dev/null | awk '{ print $2; exit }' || true)"
+    latest_handshake="$(awg show ${AWG_INTERFACE} latest-handshakes 2>/dev/null | awk '{ print $2; exit }' || true)"
     if [ -n "${latest_handshake}" ] && [ "${latest_handshake}" != "0" ]; then
       bashio::log.info "AmneziaWG handshake established"
       return
@@ -393,7 +406,7 @@ wait_for_amneziawg_handshake() {
     sleep 1
   done
 
-  transfer_line="$(awg show awg0 transfer 2>/dev/null | awk '{ print "received=" $2 ", sent=" $3; exit }' || true)"
+  transfer_line="$(awg show ${AWG_INTERFACE} transfer 2>/dev/null | awk '{ print "received=" $2 ", sent=" $3; exit }' || true)"
   bashio::log.warning "AmneziaWG handshake was not established after 20 seconds (${transfer_line:-no transfer stats})"
   bashio::log.warning "Check that the endpoint UDP port is reachable and that PrivateKey/PublicKey/PresharedKey/AmneziaWG parameters match the server"
 }
@@ -402,7 +415,7 @@ write_amneziawg_interface_config() {
   {
     printf '[Interface]\n'
     printf 'PrivateKey = %s\n' "${AWG_PRIVATE_KEY}"
-  } > /tmp/amneziawg/awg0.conf
+  } > "${AWG_DIR}/${AWG_INTERFACE}.conf"
 
   append_awg_option "ListenPort" "${AWG_LISTEN_PORT}"
   append_awg_option "Jc" "${AWG_JC}"
@@ -438,7 +451,7 @@ write_amneziawg_interface_config() {
     printf 'Endpoint = %s\n' "${AWG_ENDPOINT}"
     printf 'AllowedIPs = %s\n' "${AWG_ALLOWED_IPS}"
     append_awg_option "PersistentKeepalive" "${AWG_KEEPALIVE}"
-  } >> /tmp/amneziawg/awg0.conf
+  } >> "${AWG_DIR}/${AWG_INTERFACE}.conf"
 }
 
 parse_endpoint() {
@@ -481,22 +494,22 @@ setup_amneziawg() {
   create_amneziawg_interface
 
   for i in $(seq 1 20); do
-    if ip link show awg0 >/dev/null 2>&1; then
+    if ip link show ${AWG_INTERFACE} >/dev/null 2>&1; then
       break
     fi
     sleep 0.1
   done
 
-  if ! ip link show awg0 >/dev/null 2>&1; then
-    bashio::log.fatal "Failed to create AmneziaWG interface awg0"
+  if ! ip link show ${AWG_INTERFACE} >/dev/null 2>&1; then
+    bashio::log.fatal "Failed to create AmneziaWG interface ${AWG_INTERFACE}"
     exit 1
   fi
 
-  awg setconf awg0 /tmp/amneziawg/awg0.conf
+  awg setconf ${AWG_INTERFACE} "${AWG_DIR}/${AWG_INTERFACE}.conf"
 
   while IFS= read -r address; do
     [ -n "${address}" ] || continue
-    ip address add "${address}" dev awg0
+    ip address add "${address}" dev ${AWG_INTERFACE}
     address_ip="${address%%/*}"
     if [[ "${address_ip}" == *:* ]]; then
       AWG_SEND_THROUGH_V6="${address_ip}"
@@ -505,17 +518,17 @@ setup_amneziawg() {
     fi
   done < <(split_csv "${AWG_ADDRESS}")
 
-  ip link set mtu "${AWG_MTU}" dev awg0
-  ip link set up dev awg0
+  ip link set mtu "${AWG_MTU}" dev ${AWG_INTERFACE}
+  ip link set up dev ${AWG_INTERFACE}
 
   route_endpoint_via_original_default "${endpoint_ip}" "${original_gateway}" "${original_dev}"
 
   while IFS= read -r allowed_ip; do
     [ -n "${allowed_ip}" ] || continue
     case "${allowed_ip}" in
-      0.0.0.0/0) ip route replace default dev awg0 table 51820 ;;
-      ::/0) ip -6 route replace default dev awg0 table 51820 || true ;;
-      *) ip route replace "${allowed_ip}" dev awg0 table 51820 || ip -6 route replace "${allowed_ip}" dev awg0 table 51820 || true ;;
+      0.0.0.0/0) ip route replace default dev ${AWG_INTERFACE} table 51820 ;;
+      ::/0) ip -6 route replace default dev ${AWG_INTERFACE} table 51820 || true ;;
+      *) ip route replace "${allowed_ip}" dev ${AWG_INTERFACE} table 51820 || ip -6 route replace "${allowed_ip}" dev ${AWG_INTERFACE} table 51820 || true ;;
     esac
   done < <(split_csv "${AWG_ALLOWED_IPS}")
 
@@ -526,13 +539,13 @@ setup_amneziawg() {
     ip -6 rule add from "${AWG_SEND_THROUGH_V6}" table 51820 priority 10000 2>/dev/null || true
   fi
 
-  bashio::log.info "Started AmneziaWG target ${AWG_ENDPOINT_HOST}:${AWG_ENDPOINT_PORT} on awg0"
+  bashio::log.info "Started AmneziaWG target ${AWG_ENDPOINT_HOST}:${AWG_ENDPOINT_PORT} on ${AWG_INTERFACE}"
   wait_for_amneziawg_handshake
   log_amneziawg_state
 }
 
 write_socks_direct_xray_config() {
-  mkdir -p /usr/local/etc/xray
+  mkdir -p "${XRAY_DIR}"
 
   jq -n \
     --argjson socks_port "$SOCKS_PORT" \
@@ -570,15 +583,15 @@ write_socks_direct_xray_config() {
           tag: "block"
         }
       ]
-    }' > /usr/local/etc/xray/config.json
+    }' > "${XRAY_DIR}/config.json"
 }
 
 select_amneziawg_config() {
   case "${AMNEZIAWG_PROFILE}" in
-    1) AMNEZIAWG_CONFIG="$(bashio::config 'amneziawg_config')" ;;
-    2) AMNEZIAWG_CONFIG="$(bashio::config 'amneziawg_config_2')" ;;
-    3) AMNEZIAWG_CONFIG="$(bashio::config 'amneziawg_config_3')" ;;
-    4) AMNEZIAWG_CONFIG="$(bashio::config 'amneziawg_config_4')" ;;
+    1) AMNEZIAWG_CONFIG="$(profile_config 'amneziawg_config')" ;;
+    2) AMNEZIAWG_CONFIG="$(profile_config 'amneziawg_config_2')" ;;
+    3) AMNEZIAWG_CONFIG="$(profile_config 'amneziawg_config_3')" ;;
+    4) AMNEZIAWG_CONFIG="$(profile_config 'amneziawg_config_4')" ;;
     *)
       bashio::log.fatal "Option 'amneziawg_profile' must be 1, 2, 3, or 4"
       exit 1
@@ -588,18 +601,18 @@ select_amneziawg_config() {
   bashio::log.info "Selected AmneziaWG profile ${AMNEZIAWG_PROFILE}"
 }
 
-LINK="$(bashio::config 'link')"
-PROTOCOL="$(bashio::config 'protocol')"
-AMNEZIAWG_PROFILE="$(bashio::config 'amneziawg_profile')"
+LINK="$(profile_config 'link')"
+PROTOCOL="$(profile_config 'protocol')"
+AMNEZIAWG_PROFILE="$(profile_config 'amneziawg_profile')"
 AMNEZIAWG_CONFIG=""
-LOGLEVEL="$(bashio::config 'loglevel')"
-WATCHDOG_ENABLED="$(bashio::config 'watchdog_enabled')"
-WATCHDOG_URLS="$(bashio::config 'watchdog_urls')"
+LOGLEVEL="$(profile_config 'loglevel')"
+WATCHDOG_ENABLED="$(profile_config 'watchdog_enabled')"
+WATCHDOG_URLS="$(profile_config 'watchdog_urls')"
 if [ -z "${WATCHDOG_URLS}" ] || [ "${WATCHDOG_URLS}" = "null" ]; then
   WATCHDOG_URLS="https://www.cloudflare.com/cdn-cgi/trace,https://www.google.com/generate_204"
 fi
 
-SOCKS_PORT="1080"
+SOCKS_PORT="${SOCKS_PORT:-1080}"
 SERVER=""
 PORT=""
 UUID=""
@@ -671,7 +684,7 @@ case "${PROTOCOL}" in
       exit 1
     fi
 
-    mkdir -p /usr/local/etc/xray
+    mkdir -p "${XRAY_DIR}"
 
     USER_JSON="$(jq -n \
       --arg id "$UUID" \
@@ -749,7 +762,7 @@ case "${PROTOCOL}" in
             tag: "block"
           }
         ]
-      }' > /usr/local/etc/xray/config.json
+      }' > "${XRAY_DIR}/config.json"
 
     bashio::log.info "Resolved VLESS target ${SERVER}:${PORT} with SNI ${SNI}"
     if [ -n "${FLOW}" ]; then
@@ -775,8 +788,8 @@ case "${PROTOCOL}" in
 esac
 
 bashio::log.info "Starting Xray on SOCKS5 port ${SOCKS_PORT}"
-/usr/local/bin/xray run -test -config /usr/local/etc/xray/config.json
-/usr/local/bin/xray run -config /usr/local/etc/xray/config.json &
+/usr/local/bin/xray run -test -config "${XRAY_DIR}/config.json"
+/usr/local/bin/xray run -config "${XRAY_DIR}/config.json" &
 XRAY_PID=$!
 supervise_runtime
 bashio::log.warning "Restarting VPN processes in 30 seconds"
