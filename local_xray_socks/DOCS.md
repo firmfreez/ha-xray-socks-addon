@@ -182,8 +182,8 @@ DNS-forwarder (UDP и TCP): слот 1 — порт 10531, слот 2 — 10532,
 
 Подставьте реальные зоны и адрес Raspberry Pi; клиенты должны использовать этот
 AdGuard Home как DNS. Для каждой зоны выберите только её VPN-forwarder, без
-публичного fallback. DNS-forwarder использует TCP к корпоративному DNS на порту 53;
-этот трафик должен быть разрешён рабочим VPN. Для проверки можно временно использовать
+публичного fallback. DNS-forwarder сначала использует UDP к корпоративному DNS на порту 53;
+при усечённом ответе или недоступности UDP пробует TCP. Для проверки можно временно использовать
 SOCKS непосредственно в браузере с удалённым разрешением DNS.
 
 Автоматический fallback рабочих маршрутов на обычный интернет на Keenetic
@@ -215,7 +215,7 @@ SOCKS непосредственно в браузере с удалённым �
 
 ```sh
 python3 -B -m unittest discover -s tests -v
-docker build --platform linux/arm64 --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=0.7.5 -t local-xray-socks:0.7.5 local_xray_socks
+docker build --platform linux/arm64 --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=0.7.6 -t local-xray-socks:0.7.6 local_xray_socks
 ```
 
 Основной образ остаётся Home Assistant Alpine. Check Point использует неизменённый

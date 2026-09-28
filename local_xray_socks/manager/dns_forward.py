@@ -1,7 +1,7 @@
 """Small uncached DNS forwarder, run as the same restricted UID as SOCKS.
 
-UDP queries use TCP upstream to avoid truncation/retry ambiguity. Downstream
-UDP answers are capped at 512 bytes and marked truncated for TCP retry.
+Try UDP upstream first for corporate DNS that blocks TCP. Retry truncated or
+unavailable UDP over TCP. Downstream UDP is capped at 512 bytes for TCP retry.
 """
 import socket
 import socketserver
@@ -50,11 +50,26 @@ def minimal_reply(query, rcode=0, truncated=False):
     return query[:2] + flags + b'\x00\x01' + b'\0' * 6 + query[12:pos]
 
 
-def forward(query, upstreams):
+def forward(query, upstreams, prefer_udp=False):
     if len(query) < 12 or len(query) > 65535 or query[2] & 0x80:
         raise ValueError('Invalid DNS query')
     failure = minimal_reply(query, rcode=2)
     for upstream in upstreams:
+        if prefer_udp:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+                    udp.settimeout(1.5)
+                    # Connected UDP accepts packets only from this DNS server.
+                    udp.connect((upstream, 53))
+                    udp.send(query)
+                    answer = udp.recv(65535)
+                    valid = (len(answer) >= 12 and answer[:2] == query[:2]
+                             and answer[2] & 0x80
+                             and minimal_reply(answer)[12:] == failure[12:])
+                    if valid and not answer[2] & 2:
+                        return answer
+            except (OSError, ValueError):
+                pass
         try:
             with socket.create_connection((upstream, 53), timeout=3) as conn:
                 conn.sendall(struct.pack('!H', len(query)) + query)
@@ -85,7 +100,7 @@ def main():
         def handle(self):
             query, sock = self.request
             try:
-                answer = forward(query, upstream_servers(dns))
+                answer = forward(query, upstream_servers(dns), prefer_udp=True)
                 if len(answer) > 512:
                     answer = minimal_reply(query, truncated=True)
                 sock.sendto(answer, self.client_address)
@@ -98,7 +113,7 @@ def main():
             try:
                 while True:
                     size = struct.unpack('!H', read_exact(self.request, 2))[0]
-                    answer = forward(read_exact(self.request, size), upstream_servers(dns))
+                    answer = forward(read_exact(self.request, size), upstream_servers(dns), prefer_udp=True)
                     self.request.sendall(struct.pack('!H', len(answer)) + answer)
             except (OSError, ValueError):
                 pass

@@ -1,3 +1,8 @@
+# 0.7.6
+
+- Fix corporate DNS forwarding when the VPN permits UDP DNS but blocks TCP DNS.
+- Retry truncated UDP replies over TCP and validate the upstream DNS question.
+
 # 0.7.5
 
 - Replace connection cards with a responsive list and a secondary actions menu.

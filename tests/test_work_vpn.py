@@ -131,6 +131,22 @@ class DNSTests(unittest.TestCase):
             connect.return_value.__enter__.return_value = sock
             self.assertEqual(forward(self.query, ['10.1.1.1']), response)
 
+    def test_udp_only_corporate_dns(self):
+        response = self.query[:2] + b'\x81\x80' + self.query[4:]
+        with patch('dns_forward.socket.socket') as udp, patch('dns_forward.socket.create_connection') as tcp:
+            udp.return_value.__enter__.return_value.recv.return_value = response
+            self.assertEqual(forward(self.query, ['10.9.1.4'], prefer_udp=True), response)
+            tcp.assert_not_called()
+
+    def test_truncated_or_wrong_udp_reply_retries_tcp(self):
+        response = self.query[:2] + b'\x81\x80' + self.query[4:]
+        for udp_response in (minimal_reply(self.query, truncated=True), b'\0\0'+response[2:]):
+            with self.subTest(response=udp_response), patch('dns_forward.socket.socket') as udp, patch('dns_forward.socket.create_connection') as tcp:
+                udp.return_value.__enter__.return_value.recv.return_value = udp_response
+                tcp.return_value.__enter__.return_value.recv.side_effect = [len(response).to_bytes(2, 'big'), response]
+                self.assertEqual(forward(self.query, ['10.9.1.4'], prefer_udp=True), response)
+                tcp.assert_called_once_with(('10.9.1.4', 53), timeout=3)
+
     def test_bad_query_or_eof(self):
         with self.assertRaises(ValueError):
             forward(b'bad', [])
