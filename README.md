@@ -7,7 +7,12 @@ Home Assistant add-on repository with a local Xray-based SOCKS5 proxy for Raspbe
 - `local_xray_socks`: Runs Xray inside a Home Assistant add-on container and exposes a SOCKS5 port for LAN clients such as Keenetic.
 
 
-## Upgrade to 0.7.7
+## Upgrade to 0.7.8
+
+Profiles start and recover independently. Temporary endpoint DNS failures and
+exited processes are retried with a 5–300 second backoff. Manual stop cancels
+recovery. OpenVPN/Check Point also reconnect after three failed checks of their
+configured work site; recognized authentication errors require manual correction.
 
 Manage VLESS, AmneziaWG, OpenVPN and Check Point in the **VPN Manager** Ingress
 panel. Saved configurations can be viewed and edited. The obsolete HA options

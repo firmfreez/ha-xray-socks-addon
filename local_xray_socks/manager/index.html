@@ -17,13 +17,13 @@ body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display
 <p class="intro">Личные и рабочие сети в одном месте. Управляйте доступом, проверяйте соединения и следите за активностью.</p>
 <div id="notice" role="status"></div>
 <div class="overview" aria-label="Состояние аддона"><div><small>АКТИВНЫЕ ПРОФИЛИ</small><strong id="active_count">—</strong></div><div><small>CPU АДДОНА</small><strong id="cpu_load">—</strong></div><div><small>ПАМЯТЬ АДДОНА</small><strong id="memory_load">—</strong></div><div><small>ПРОФИЛИ</small><strong id="profile_count">—</strong></div></div>
-<div class="toolbar"><h2>Ваши сети</h2><div class="filters" aria-label="Фильтр подключений"><button class="selected" data-filter="all" aria-pressed="true">Все</button><button data-filter="active" aria-pressed="false">Активные</button><button data-filter="stopped" aria-pressed="false">Остановленные</button></div></div><div class="section-label"><span>Ваши подключения</span><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро</span></div><div id="cards"></div><footer class="dashboard-footer"><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро<br>Счётчики интерфейсов за сессию, включая служебный трафик</span><span>LOCAL XRAY / 0.7.6</span></footer></main></div>
+<div class="toolbar"><h2>Ваши сети</h2><div class="filters" aria-label="Фильтр подключений"><button class="selected" data-filter="all" aria-pressed="true">Все</button><button data-filter="active" aria-pressed="false">Активные</button><button data-filter="stopped" aria-pressed="false">Остановленные</button></div></div><div class="section-label"><span>Ваши подключения</span><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро</span></div><div id="cards"></div><footer class="dashboard-footer"><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро<br>Счётчики интерфейсов за сессию, включая служебный трафик</span><span>LOCAL XRAY / 0.7.8</span></footer></main></div>
 <dialog id="editor"><h2 id="heading">Новое подключение</h2><form id="form">
 <div class="grid"><label>Название<input name="name" required maxlength="80"></label><label>Порт SOCKS5<select name="slot"></select></label></div>
 <label>Протокол<select name="kind"><option value="vless">VLESS</option><option value="amneziawg">AmneziaWG</option><option value="openvpn">OpenVPN</option><option value="checkpoint">Check Point (snx-rs)</option></select></label>
 <div id="vless" class="protocol"><label>VLESS-ссылка<textarea name="link" placeholder="vless://…"></textarea></label></div>
 <div id="awg" class="protocol hidden"><label>Конфигурация AmneziaWG<textarea name="amneziawg_config" placeholder="[Interface]… [Peer]…"></textarea></label></div>
-<div id="personal" class="protocol"><label>Уровень журнала<select name="loglevel"><option value="warning">warning</option><option value="info">info</option><option value="error">error</option><option value="none">none</option><option value="debug">debug</option></select></label><label class="check"><input type="checkbox" name="watchdog_enabled" checked>Проверять доступность и переподключать VPN</label><label>URL проверки (через запятую)<input name="watchdog_urls" placeholder="По умолчанию Cloudflare и Google"></label><small>TCP и UDP доступны на выбранном порту SOCKS5.</small></div>
+<div id="personal" class="protocol"><label>Уровень журнала<select name="loglevel"><option value="warning">warning</option><option value="info">info</option><option value="error">error</option><option value="none">none</option><option value="debug">debug</option></select></label><label>URL проверки (через запятую)<input name="watchdog_urls" placeholder="По умолчанию Cloudflare и Google"></label><small>TCP и UDP доступны на выбранном порту SOCKS5.</small></div>
 <div id="ovpn"><label>Импорт .ovpn<input id="ovpnfile" type="file" accept=".ovpn,.conf"></label><label>Конфигурация<textarea name="ovpn" placeholder="Вставьте конфигурацию .ovpn."></textarea></label><label>Пароль закрытого ключа (если требуется)<input name="key_password" type="password" autocomplete="new-password"></label></div>
 <div id="cp" class="hidden">
 <label>Адрес сервера Check Point<input name="server" placeholder="vpn.example.com"></label>
@@ -47,7 +47,8 @@ body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display
 <div id="workfields" class="protocol"><div class="grid" id="account_credentials"><label>Логин<input name="username" autocomplete="off"></label><label>Пароль<input name="password" type="password" autocomplete="new-password"></label></div>
 <label>Корпоративные DNS (IPv4 через запятую)<input name="dns" placeholder="10.20.0.53,10.20.0.54"></label><small>OpenVPN и Check Point получают DNS от VPN-сервера автоматически. Обычно оставьте поле пустым. Заполните его только для ручного выбора корпоративного DNS.</small>
 <label>Дополнительные файлы (CA, ключи OpenVPN)<input id="assets" type="file" multiple></label><small id="files"></small>
-</div><label>Сайт для проверки подключения<input name="probe_url" placeholder="Например, intranet.company.ru"><small>Проверка идёт через SOCKS этого VPN. Для VLESS и AmneziaWG пустое поле означает проверку интернета; для рабочего VPN укажите доступный через него сайт.</small></label><label class="check"><input type="checkbox" name="autostart">Подключать при запуске аддона</label>
+</div><label>Сайт для проверки подключения<input name="probe_url" placeholder="Например, intranet.company.ru"><small>Проверка идёт через SOCKS этого VPN. Для VLESS и AmneziaWG пустое поле означает проверку интернета; для рабочего VPN укажите доступный через него сайт.</small></label><label class="check"><input type="checkbox" name="watchdog_enabled" checked>Проверять доступность и переподключать VPN</label>
+<label class="check"><input type="checkbox" name="autostart">Подключать при запуске аддона</label>
 <small>Пустые поля паролей при редактировании сохраняют прежние значения. Файлы с тем же именем заменяются. Секреты хранятся в данных аддона и попадают в его резервную копию.</small>
 <label class="check"><input type="checkbox" id="clearsecrets">Очистить ранее сохранённые пароли</label>
 <div id="formerror" role="alert"></div><div class="actions"><button class="primary" type="submit">Сохранить</button><button type="button" id="cancel">Отмена</button></div></form></dialog>
@@ -95,18 +96,18 @@ async function refresh(){
   $('#memory_load').title=status.load?.memory_limit?'Лимит: '+bytes(status.load.memory_limit):'Потребление памяти контейнера';
   $('#add').disabled=profiles.length>=9;
   if(!profiles.length){const p=document.createElement('p');p.className='empty';p.textContent='Здесь появятся ваши подключения. Добавьте первый VPN, чтобы начать.';$('#cards').append(p)}
-  const visible=profiles.filter(p=>profileFilter==='all'||(profileFilter==='active'?['running_unverified','starting'].includes(p.state):['stopped','error'].includes(p.state)));
+  const visible=profiles.filter(p=>profileFilter==='all'||(profileFilter==='active'?['running_unverified','starting','retrying','stopping'].includes(p.state):['stopped','error'].includes(p.state)));
   if(profiles.length&&!visible.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='Нет подключений в этой категории';$('#cards').append(empty)}
   for(const p of visible){
     const card=document.createElement('article');card.className='card';
     const badge=document.createElement('div');badge.className='protocol-label';const icon=document.createElement('span');icon.className='protocol-icon';icon.textContent=({vless:'V',amneziawg:'A',openvpn:'O',checkpoint:'C'})[p.kind];const name=document.createElement('span');name.textContent=({vless:'VLESS',amneziawg:'AMNEZIA WG',openvpn:'OPENVPN',checkpoint:'CHECK POINT'})[p.kind];badge.append(icon,name);
     const h=document.createElement('h2');h.textContent=p.name;
     const state=document.createElement('div');state.className='status'+(p.state==='running_unverified'?' online':p.state==='error'?' error':'');
-    state.textContent=({stopped:'Остановлен',starting:'Подключается',error:'Ошибка — откройте журнал',running_unverified:'Запущен'})[p.state]||p.state;
+    state.textContent=({stopped:'Остановлен',starting:'Подключается',stopping:'Отключается',retrying:'Ожидание повторного подключения',error:'Ошибка — откройте журнал',running_unverified:'Запущен'})[p.state]||p.state;
     const info=document.createElement('p');info.textContent=({vless:'VLESS',amneziawg:'AmneziaWG',openvpn:'OpenVPN',checkpoint:'Check Point'})[p.kind]+' · SOCKS5 :'+p.port+' · TCP/UDP'+(p.dns_port?' · DNS :'+p.dns_port:'');
     const health=document.createElement('p');
     if(p.probe){health.textContent=(p.probe.reachable?'✓ Сайт доступен через VPN':'✕ Нет ответа через VPN')+' · '+new Date(p.probe.checked_at*1000).toLocaleTimeString()+'\n'+p.probe.url+(p.probe.http_status&&p.probe.http_status!=='000'?' · HTTP '+p.probe.http_status:'');health.style.whiteSpace='pre-wrap'}
-    else{health.textContent=p.state==='running_unverified'?(['vless','amneziawg'].includes(p.kind)||p.probe_url?'Проверяем подключение…':'Укажите рабочий сайт в настройках для проверки связи.'):''}
+    else{health.textContent=p.state==='retrying'?'Повтор через '+Math.max(0,Math.ceil(p.retry_at-Date.now()/1000))+' с':p.state==='running_unverified'?(['vless','amneziawg'].includes(p.kind)||p.probe_url?'Проверяем подключение…':'Укажите рабочий сайт в настройках для проверки связи.'):''}
     const dns=document.createElement('p');
     if(p.dns_status){dns.textContent=p.dns_status.servers.length?'DNS: '+p.dns_status.servers.join(', ')+(['openvpn','checkpoint'].includes(p.dns_status.source)?' · получен от VPN':' · задан вручную'):'Корпоративный DNS пока не получен. Если туннель подключён, укажите DNS в настройках.'}
     const a=document.createElement('div');a.className='actions';
@@ -114,7 +115,7 @@ async function refresh(){
     more.addEventListener('toggle',()=>{if(more.open)for(const other of document.querySelectorAll('.more-actions[open]'))if(other!==more)other.open=false});
     menu.addEventListener('click',e=>{if(e.target.closest('button'))more.open=false});
     const start=btn('Подключить',()=>action(p,'start'),'connect');start.disabled=!['stopped','error'].includes(p.state);
-    const stop=btn('Отключить',()=>action(p,'stop'));stop.disabled=p.state==='stopped';
+    const stop=btn('Отключить',()=>action(p,'stop'));stop.disabled=['stopped','stopping'].includes(p.state);
     const check=btn('Проверить подключение',async()=>{
       if(!['vless','amneziawg'].includes(p.kind)&&!p.probe_url){await edit(p);field('probe_url').focus();return}
       health.textContent='Проверяем связь через VPN…';

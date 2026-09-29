@@ -31,8 +31,18 @@ class Manager:
         self.notice = ''
         self.load = Load()
         for file in root.glob('*/profile.json'):
-            p = json.loads(file.read_text())
-            self.profiles[p['id']] = p
+            try:
+                p = validate(json.loads(file.read_text()))
+                if (p.get('id') != file.parent.name or len(p['id']) != 32
+                        or any(c not in '0123456789abcdef' for c in p['id'])):
+                    raise ValueError('Invalid profile ID')
+                if any(saved['slot'] == p['slot'] for saved in self.profiles.values()):
+                    raise ValueError('Duplicate profile slot')
+                (file.parent / 'assets').mkdir(exist_ok=True, mode=0o700)
+                self.profiles[p['id']] = p
+            except (ValueError, TypeError, KeyError, OSError):
+                self.notice = 'Некоторые сохранённые профили повреждены и пропущены. Исходные файлы сохранены; остальные подключения доступны.'
+                print(f'Cannot load profile {file.parent.name}; original file retained.', flush=True)
 
     def public(self, p):
         result = {k: v for k, v in p.items() if k not in SECRET_FIELDS}
@@ -45,8 +55,9 @@ class Manager:
         result['udp'] = True
         result['metrics'] = runtime.metrics() if runtime else None
         result['probe'] = runtime.last_probe if runtime else None
+        result['retry_at'] = runtime.retry_at if runtime else None
         result['dns_status'] = (runtime.dns_status() if runtime
-                                and runtime.state not in ('stopped', 'error')
+                                and runtime.state == 'running_unverified'
                                 and p['kind'] not in PERSONAL else None)
         return result
 
@@ -71,7 +82,7 @@ class Manager:
                 raise ValueError('Некорректный ID')
             old = self.profiles.get(ident, {})
             runtime = self.runtimes.get(ident)
-            if runtime and runtime.state not in ('stopped', 'error'):
+            if runtime and runtime.active:
                 raise ValueError('Сначала остановите профиль')
             data = dict(data)
             for key in SECRET_FIELDS:
@@ -126,6 +137,24 @@ class Manager:
             return self.public(p)
 
     def action(self, ident, action, data):
+        if action == 'info':
+            with self.lock:
+                p = self.profiles.get(ident)
+                if not p or p['kind'] != 'checkpoint':
+                    raise ValueError('Только для Check Point')
+                request = {'server': p['server'], 'id': ident}
+            return self.checkpoint_info(request)
+        if action == 'stop':
+            with self.lock:
+                if ident not in self.profiles:
+                    raise ValueError('Профиль не найден')
+                runtime = self.runtimes.get(ident)
+                if runtime:
+                    runtime.state = 'stopping'
+            if runtime:
+                runtime.stop()
+            with self.lock:
+                return self.public(self.profiles[ident])
         if action == 'probe':
             with self.lock:
                 runtime = self.runtimes.get(ident)
@@ -141,10 +170,6 @@ class Manager:
                 for key in ('link', 'amneziawg_config', 'ovpn'):
                     result[key] = p.get(key, '')
                 return result
-            if action == 'info':
-                if p['kind'] != 'checkpoint':
-                    raise ValueError('Только для Check Point')
-                return self.checkpoint_info({'server': p['server'], 'id': ident})
             runtime = self.runtimes.get(ident)
             if action == 'delete':
                 if runtime:
@@ -154,22 +179,10 @@ class Manager:
                 self.runtimes.pop(ident, None)
                 return {'ok': True}
             if action == 'start':
-                if runtime is None or runtime.state in ('stopped', 'error'):
-                    if p['kind'] == 'checkpoint' and not p['login_type']:
-                        info = self.checkpoint_info({'server': p['server'], 'id': ident})
-                        certificate = p.get('auth_mode', 'certificate' if p.get('certificate') else 'password') == 'certificate'
-                        choices = [m for m in info['methods'] if m['certificate'] == certificate]
-                        if len(choices) != 1:
-                            raise ValueError('Откройте настройки и выберите метод входа, предложенный сервером')
-                        # Use the detected choice for this connection; the saved profile stays in auto mode.
-                        p = dict(p, login_type=choices[0]['id'])
+                if runtime is None or not runtime.active:
                     runtime = Runtime(p, self.root / ident)
                     self.runtimes[ident] = runtime
-                    runtime.start()
-                return self.public(p)
-            if action == 'stop':
-                if runtime:
-                    runtime.stop()
+                    runtime.launch()
                 return self.public(p)
             raise ValueError('Неизвестная операция')
 
@@ -244,6 +257,8 @@ def handler(manager):
                 self.reply(400, {'error': str(exc)})
             except subprocess.TimeoutExpired:
                 self.reply(504, {'error': 'Время ожидания истекло'})
+            except OSError:
+                self.reply(502, {'error': 'Сервер недоступен. Проверьте DNS, подключение и CA-сертификат.'})
             except Exception:
                 self.reply(500, {'error': 'Операция не выполнена; проверьте журнал аддона'})
     return Handler
@@ -259,14 +274,24 @@ def main():
         print('Legacy settings could not be fully imported. Original options retained; check saved profiles.', flush=True)
     server = ThreadingHTTPServer(('0.0.0.0', 8099), handler(manager))
     def stop(*_):
-        for runtime in list(manager.runtimes.values()):
-            runtime.stop()
+        runtimes = list(manager.runtimes.values())
+        for runtime in runtimes:
+            runtime.cancelled.set()
+        workers = [threading.Thread(target=runtime.stop, daemon=True) for runtime in runtimes]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join(timeout=10)
         raise SystemExit(0)
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     for p in list(manager.profiles.values()):
         if p['autostart']:
-            manager.action(p['id'], 'start', {})
+            try:
+                manager.action(p['id'], 'start', {})
+            except Exception:
+                manager.notice = 'Не все профили удалось запустить. Проверьте их журналы; остальные подключения продолжают работать.'
+                print(f"Could not launch profile {p['id']}; continuing startup.", flush=True)
     print('Local Xray SOCKS manager ready on Ingress port 8099', flush=True)
     server.serve_forever()
 

@@ -1,3 +1,16 @@
+# 0.7.8
+
+- Start and recover profiles independently; unavailable Check Point discovery or
+  endpoint DNS no longer blocks other profiles or the Ingress panel.
+- Retry DNS/startup failures and exited processes with a 5–300 second backoff.
+  Manual stop cancels pending recovery; stale probes cannot overwrite a new attempt.
+- Reconnect OpenVPN/Check Point after three failed checks of the configured work
+  site. Recognized authentication/certificate failures require manual correction.
+- Bound endpoint DNS lookups, wait for concurrent firewall updates, and preserve
+  per-profile routes, processes and corporate DNS isolation during recovery.
+- Show retry status/countdown and timestamp lifecycle events in the add-on log.
+- Skip damaged saved profiles without stopping healthy ones or deleting data.
+
 # 0.7.7
 
 - Use neutral example names and server addresses in the Check Point UI and tests.

@@ -19,5 +19,5 @@ def gateway_info(server, ca=None):
     result = subprocess.run(args, capture_output=True, text=True, timeout=25)
     text = (result.stdout + result.stderr)[-12000:]
     if result.returncode:
-        raise ValueError('Не удалось получить методы входа. Проверьте адрес сервера и его CA-сертификат. ' + text[-1500:])
+        raise OSError('Не удалось получить методы входа. Проверьте адрес сервера и его CA-сертификат. ' + text[-1500:])
     return {'text': text, 'methods': parse_methods(text)}

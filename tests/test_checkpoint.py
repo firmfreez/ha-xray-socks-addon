@@ -44,11 +44,15 @@ class CheckPointTests(unittest.TestCase):
             self.assertTrue(p['has_secrets']['cert_password'])
             manager.save(dict(p, cert_password=''))
             self.assertEqual(manager.profiles[p['id']]['cert_password'], 'secret')
-            with patch('server.gateway_info', return_value={'text': INFO, 'methods': parse_methods(INFO)}), \
-                 patch('server.Runtime') as cls:
-                manager.action(p['id'], 'start', {})
-                active = cls.call_args.args[0]
-                self.assertEqual(active['login_type'], 'vpn_Personal_Certificate')
+            runtime = Runtime(manager.profiles[p['id']], Path(tmp) / p['id'])
+            runtime.work = Path(tmp) / 'run'
+            with patch('runtime.gateway_info', return_value={'text': INFO, 'methods': parse_methods(INFO)}), \
+                 patch('runtime.NETNS_ROOT', Path(tmp) / 'netns'), \
+                 patch('runtime.endpoint_addresses', return_value=['192.0.2.1']), \
+                 patch('runtime.run', return_value=MagicMock(stdout='1')), \
+                 patch.object(runtime, 'spawn'), patch.object(runtime, 'started'):
+                runtime.start()
+                self.assertEqual(runtime.p['login_type'], 'vpn_Personal_Certificate')
                 self.assertEqual(manager.profiles[p['id']]['login_type'], '')
 
     def test_multiple_certificate_choices_require_selection(self):
@@ -58,9 +62,14 @@ class CheckPointTests(unittest.TestCase):
             p['id'] = '1'*32
             manager.profiles[p['id']] = p
             methods = parse_methods(INFO+' [Other]: vpn_Other (certificate)\n')
-            with patch('server.gateway_info', return_value={'methods': methods}):
-                with self.assertRaisesRegex(ValueError, 'выберите'):
-                    manager.action(p['id'], 'start', {})
+            runtime = Runtime(p, Path(tmp))
+            runtime.work = Path(tmp) / 'run'
+            with patch('runtime.gateway_info', return_value={'methods': methods}), \
+                 patch('runtime.NETNS_ROOT', Path(tmp) / 'netns'):
+                runtime.start()
+            self.assertEqual(runtime.state, 'error')
+            self.assertFalse(runtime.retryable)
+            self.assertIn('выберите', '\n'.join(runtime.logs))
 
     def test_certificate_runtime_and_private_auto_resolver(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -72,7 +81,7 @@ class CheckPointTests(unittest.TestCase):
             runtime = Runtime(p, directory)
             runtime.work = directory / 'run'
             with patch('runtime.NETNS_ROOT', directory / 'netns'), patch('runtime.run', return_value=MagicMock(stdout='1')), \
-                 patch('runtime.socket.getaddrinfo', return_value=[(None,None,None,None,('192.0.2.1',0))]), \
+                 patch('runtime.endpoint_addresses', return_value=['192.0.2.1']), \
                  patch.object(runtime, 'spawn') as spawn, patch.object(runtime, 'started'):
                 runtime.start()
             config = (runtime.work / 'snx.conf').read_text()

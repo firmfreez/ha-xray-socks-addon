@@ -16,6 +16,7 @@ import time
 from telemetry import Traffic
 from model import ovpn_config, PERSONAL, personal_options
 from vpn_dns import publish, read_state, resolver_state
+from checkpoint import gateway_info
 
 NETNS_ROOT = Path('/etc/netns')
 HOSTS_FILE = Path('/etc/hosts')
@@ -23,7 +24,33 @@ RESOLV_FILE = Path('/etc/resolv.conf')
 
 
 def run(*args, check=True):
+    # Profile workers share the host's xtables lock during concurrent setup.
+    if 'iptables' in args:
+        args = list(args)
+        pos = args.index('iptables') + 1
+        args[pos:pos] = ['-w', '5']
     return subprocess.run(args, check=check, capture_output=True, text=True, timeout=15)
+
+
+def endpoint_addresses(host):
+    """Bound libc DNS time without leaving a stuck resolver thread behind."""
+    try:
+        return [str(ipaddress.IPv4Address(host))]
+    except ValueError:
+        pass
+    result = subprocess.run(['python3', '-c',
+        'import json,socket,sys\n'
+        'try:\n'
+        ' print(json.dumps(sorted({x[4][0] for x in socket.getaddrinfo(sys.argv[1],None,socket.AF_INET,socket.SOCK_STREAM)})))\n'
+        'except socket.gaierror as e:\n'
+        ' print(json.dumps({"errno":e.errno,"error":str(e)}))\n', host],
+        capture_output=True, text=True, check=True, timeout=12)
+    addresses = json.loads(result.stdout)
+    if isinstance(addresses, dict):
+        raise socket.gaierror(addresses['errno'], addresses['error'])
+    if not addresses:
+        raise socket.gaierror(socket.EAI_AGAIN, 'No IPv4 addresses')
+    return addresses
 
 
 class Runtime:
@@ -45,6 +72,15 @@ class Runtime:
         self.traffic = Traffic()
         self.external_ip = None
         self.started_at = None
+        self.cancelled = threading.Event()
+        self.worker = None
+        self.retryable = True
+        self.retry_at = None
+        self.auth_failed = threading.Event()
+
+    @property
+    def active(self):
+        return self.state not in ('stopped', 'error') or bool(self.worker and self.worker.is_alive())
 
     def start_personal(self, prefix):
         options = self.write('options.json', json.dumps(personal_options(self.p)))
@@ -56,14 +92,13 @@ class Runtime:
     def started(self):
         self.state = 'running_unverified'
         self.started_at = time.time()
-        threading.Thread(target=self.monitor_ip, daemon=True).start()
+        threading.Thread(target=self.monitor_ip, args=(self.stopping,), daemon=True).start()
         self.last_probe = None
         self.log('Подключение запущено.')
         if self.p['kind'] in PERSONAL or self.p.get('probe_url'):
-            threading.Thread(target=self.monitor_connection, daemon=True).start()
-        threading.Thread(target=self.monitor, daemon=True).start()
+            threading.Thread(target=self.monitor_connection, args=(self.stopping,), daemon=True).start()
 
-    def log(self, text):
+    def log(self, text, emit=True):
         for key in ('password', 'cert_password', 'key_password', 'username', 'link'):
             secret = self.p.get(key)
             if secret:
@@ -72,17 +107,28 @@ class Runtime:
         # Never retain key blocks or bearer/session data in the panel.
         if any(x in text.lower() for x in ('private key', 'auth-token', 'session_id', 'authorization:', 'cookie:')):
             text = '[sensitive log line omitted]'
-        self.logs.append(text[-2000:])
+        entry = time.strftime('%Y-%m-%d %H:%M:%S') + ' ' + text[-2000:]
+        self.logs.append(entry)
+        if emit:
+            print(f'[{self.ns}] {entry}', flush=True)
 
     def spawn(self, args, log=True):
         proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 stdin=subprocess.DEVNULL, start_new_session=True,
                                 text=True, bufsize=1)
         self.children.append(proc)
+        attempt = self.stopping
         def reader():
             for line in proc.stdout:
-                self.log(('' if log else '[runtime] ') + line.rstrip())
-        threading.Thread(target=reader, daemon=True).start()
+                if attempt.is_set():
+                    continue
+                if log and self.p['kind'] not in PERSONAL and any(marker in line.lower() for marker in
+                       ('auth_failed', 'authentication failed', 'authentication failure',
+                        'invalid credentials', 'login failed', 'certificate verify failed')):
+                    self.auth_failed.set()
+                self.log(('' if log else '[runtime] ') + line.rstrip(), emit=False)
+        proc.log_reader = threading.Thread(target=reader, daemon=True)
+        proc.log_reader.start()
         return proc
 
     def write(self, name, value):
@@ -95,15 +141,93 @@ class Runtime:
         with self.lock:
             self._start()
 
-    def _start(self):
-        if self.state not in ('stopped', 'error'):
+    def launch(self):
+        """Reserve this runtime synchronously; do all slow work in its own worker."""
+        if self.worker and self.worker.is_alive():
             return
-        self.stopping.clear()
+        self.state = 'starting'
+        self.worker = threading.Thread(target=self.supervise, daemon=True)
+        self.worker.start()
+
+    def supervise(self):
+        try:
+            self._supervise()
+        except Exception as exc:
+            self.log('Ошибка восстановления профиля: ' + str(exc))
+            self.retryable = False
+            try:
+                self._cleanup()
+            except Exception as cleanup_error:
+                self.log('Не удалось очистить ресурсы профиля: ' + str(cleanup_error))
+            self.state = 'error'
+
+    def _supervise(self):
+        delay = 5
+        while not self.cancelled.is_set():
+            with self.lock:
+                if self.cancelled.is_set():
+                    return
+                self._start()
+            since = time.monotonic()
+            failures, checked = 0, None
+            while self.state == 'running_unverified' and not self.cancelled.wait(2):
+                if self.auth_failed.is_set():
+                    self.retryable = False
+                    self.log('Авторизация или проверка сертификата отклонена. Исправьте настройки и подключите профиль снова.')
+                    break
+                if any(p.poll() is not None for p in self.children):
+                    # Read the final AUTH_FAILED line before deciding to retry.
+                    for proc in self.children:
+                        if proc.poll() is not None and hasattr(proc, 'log_reader'):
+                            proc.log_reader.join(timeout=1)
+                    self.log('Процесс профиля завершился; восстанавливаем только это подключение.')
+                    break
+                probe = self.last_probe
+                # Personal VPNs already have a watchdog inside run.sh.
+                if (self.p['kind'] not in PERSONAL and self.p.get('watchdog_enabled', True)
+                        and probe and probe['checked_at'] != checked):
+                    checked = probe['checked_at']
+                    failures = 0 if probe['reachable'] else failures + 1
+                    if failures >= 3:
+                        self.log('Три проверки рабочего сайта не прошли; переподключаем профиль.')
+                        break
+            with self.lock:
+                if self.cancelled.is_set():
+                    return
+                self._cleanup()
+                if not self.retryable or self.auth_failed.is_set():
+                    if self.auth_failed.is_set():
+                        self.log('Автоповтор отключён после ошибки авторизации или сертификата.')
+                    self.state = 'error'
+                    return
+                if time.monotonic() - since >= 120:
+                    delay = 5
+                self.state = 'retrying'
+                self.retry_at = time.time() + delay
+                self.log(f'Повторное подключение через {delay} с. Другие профили продолжают работать.')
+            if self.cancelled.wait(delay):
+                return
+            delay = min(delay * 2, 300)
+
+    def _start(self):
+        if self.state not in ('stopped', 'error', 'starting', 'retrying'):
+            return
+        # Never clear an event still held by a previous attempt's probe threads.
+        self.stopping = threading.Event()
+        self.auth_failed.clear()
+        self.retry_at = None
+        self.retryable = True
         self.state = 'starting'
         try:
+            if self.p['kind'] == 'checkpoint' and not self.p['login_type']:
+                ca = self.directory / 'assets' / self.p['ca_file'] if self.p.get('ca_file') else None
+                info = gateway_info(self.p['server'], ca)
+                certificate = self.p.get('auth_mode', 'certificate' if self.p.get('certificate') else 'password') == 'certificate'
+                choices = [m for m in info['methods'] if m['certificate'] == certificate]
+                if len(choices) != 1:
+                    raise ValueError('Откройте настройки и выберите метод входа, предложенный сервером')
+                self.p = dict(self.p, login_type=choices[0]['id'])
             self.work.mkdir(parents=True, exist_ok=True, mode=0o700)
-            run('ip', 'netns', 'add', self.ns)
-            self.networked = True
             # Docker's 127.0.0.11 resolver is not reachable from a new namespace.
             # Resolve only VPN endpoints before isolation, preserving hostnames for TLS.
             hosts = []
@@ -126,10 +250,18 @@ class Runtime:
             nsdir.mkdir(parents=True, exist_ok=True)
             mappings = HOSTS_FILE.read_text() + '\n'
             for host in set(hosts):
-                addresses = socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)
-                for address in sorted({x[4][0] for x in addresses}):
+                try:
+                    addresses = endpoint_addresses(host)
+                except (socket.gaierror, subprocess.TimeoutExpired) as exc:
+                    raise OSError(f'Не удалось разрешить имя VPN-сервера {host}: {exc}. Проверьте DNS и доступ в интернет.') from exc
+                for address in addresses:
                     mappings += f'{address} {host}\n'
             (nsdir / 'hosts').write_text(mappings)
+            if self.cancelled.is_set():
+                self._cleanup()
+                return
+            run('ip', 'netns', 'add', self.ns)
+            self.networked = True
             run('ip', 'link', 'add', self.host, 'type', 'veth', 'peer', 'name', 'eth0', 'netns', self.ns)
             run('ip', 'addr', 'add', self.gateway + '/30', 'dev', self.host)
             run('ip', 'link', 'set', self.host, 'up')
@@ -224,10 +356,11 @@ class Runtime:
                 self.spawn(['socat', '-T', '10', f"{incoming}:{10530 + self.p['slot']},fork,reuseaddr", f'{outgoing}:{self.peer}:5353'], log=False)
             self.started()
         except Exception as exc:
+            self.retryable = not isinstance(exc, ValueError)
             self.log('Ошибка запуска: ' + str(exc))
             if isinstance(exc, subprocess.CalledProcessError) and exc.stderr:
                 self.log(exc.stderr.strip())
-            self.stop()
+            self._cleanup()
             self.state = 'error'
 
     def socks_config(self, address, outbound):
@@ -254,10 +387,10 @@ class Runtime:
         return {'traffic': self.traffic.sample(self.host), 'external_ip': self.external_ip,
                 'uptime': max(0, time.time() - self.started_at) if self.started_at else 0}
 
-    def monitor_ip(self):
-        if self.stopping.wait(5):
+    def monitor_ip(self, attempt):
+        if attempt.wait(5):
             return
-        while not self.stopping.is_set():
+        while not attempt.is_set():
             address = None
             try:
                 result = run('curl', '--silent', '--fail', '--noproxy', '',
@@ -270,25 +403,29 @@ class Runtime:
                         address = str(candidate)
             except (OSError, ValueError, subprocess.SubprocessError):
                 pass
-            if self.stopping.is_set():
-                return
-            self.external_ip = address
-            if self.stopping.wait(300):
+            with self.lock:
+                if attempt.is_set():
+                    return
+                self.external_ip = address
+            if attempt.wait(300):
                 return
 
-    def monitor_connection(self):
-        if self.stopping.wait(5):
+    def monitor_connection(self, attempt):
+        if attempt.wait(5):
             return
-        while not self.stopping.is_set():
+        while not attempt.is_set():
             try:
-                self.check_connection()
+                self.check_connection(attempt)
             except (ValueError, OSError, subprocess.SubprocessError):
                 pass
-            if self.stopping.wait(30):
+            if attempt.wait(30):
                 return
 
-    def check_connection(self):
+    def check_connection(self, attempt=None):
+        attempt = attempt or self.stopping
         with self.probe_lock:
+            if attempt.is_set():
+                return None
             target = self.p.get('probe_url')
             if target:
                 urls = [target]
@@ -305,19 +442,20 @@ class Runtime:
                 result.update(url=url, checked_at=time.time())
                 if result['reachable']:
                     break
-            if not self.stopping.is_set():
-                self.last_probe = result
+            with self.lock:
+                if not attempt.is_set():
+                    self.last_probe = result
             return result
 
-    def monitor(self):
-        while not self.stopping.wait(2):
-            if any(p.poll() is not None for p in self.children):
-                self.log('Один из процессов завершился. Профиль остановлен; проверьте журнал и авторизацию.')
-                self.stop()
-                self.state = 'error'
-                return
-
     def stop(self):
+        self.cancelled.set()
+        self.stopping.set()
+        with self.lock:
+            self._cleanup()
+        if self.worker and self.worker is not threading.current_thread():
+            self.worker.join(timeout=30)
+
+    def _cleanup(self):
         with self.lock:
             self.stopping.set()
             for proc in self.children:
@@ -344,13 +482,14 @@ class Runtime:
                 run('iptables', '-t', 'nat', '-D', 'POSTROUTING', '-s', self.peer + '/32', '-j', 'MASQUERADE', check=False)
                 run('ip', 'link', 'delete', self.host, check=False)
                 run('ip', 'netns', 'delete', self.ns, check=False)
-                shutil.rmtree(NETNS_ROOT / self.ns, ignore_errors=True)
                 self.networked = False
+            shutil.rmtree(NETNS_ROOT / self.ns, ignore_errors=True)
             shutil.rmtree(self.work, ignore_errors=True)
             self.state = 'stopped'
             self.last_probe = None
             self.external_ip = None
             self.started_at = None
+            self.retry_at = None
 
     def probe(self, url):
         from urllib.parse import urlsplit
