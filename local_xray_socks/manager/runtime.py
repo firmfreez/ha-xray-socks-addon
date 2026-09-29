@@ -71,6 +71,8 @@ class Runtime:
         self.probe_lock = threading.Lock()
         self.traffic = Traffic()
         self.external_ip = None
+        self.vpn_ip = None
+        self.ip_status = 'pending'
         self.started_at = None
         self.cancelled = threading.Event()
         self.worker = None
@@ -385,7 +387,40 @@ class Runtime:
         if self.state != 'running_unverified':
             return None
         return {'traffic': self.traffic.sample(self.host), 'external_ip': self.external_ip,
+                'vpn_ip': self.vpn_ip, 'ip_status': self.ip_status,
                 'uptime': max(0, time.time() - self.started_at) if self.started_at else 0}
+
+    def discover_ip(self, attempt):
+        if self.p['kind'] not in PERSONAL:
+            result = run('ip', '-n', self.ns, '-j', '-4', 'addr', 'show')
+            for interface in json.loads(result.stdout):
+                if interface.get('ifname') in ('lo', 'eth0'):
+                    continue
+                for address in interface.get('addr_info', []):
+                    if address.get('family') == 'inet' and address.get('scope') == 'global':
+                        return str(ipaddress.IPv4Address(address['local']))
+            return None
+        for url, trace in [('https://www.cloudflare.com/cdn-cgi/trace', True),
+                           ('https://api.ipify.org', False),
+                           ('https://checkip.amazonaws.com', False)]:
+            if attempt.is_set():
+                return None
+            try:
+                result = run('curl', '-4', '--silent', '--fail', '--noproxy', '',
+                             '--proxy', f"socks5h://127.0.0.1:{1080 + self.p['slot']}",
+                             '--connect-timeout', '3', '--max-time', '6', '--max-filesize', '4096',
+                             '--proto', '=https', url, check=False)
+                if result.returncode:
+                    continue
+                value = result.stdout.strip()
+                if trace:
+                    value = next((line[3:] for line in value.splitlines() if line.startswith('ip=')), '')
+                address = ipaddress.ip_address(value)
+                if address.is_global:
+                    return str(address)
+            except (OSError, ValueError, subprocess.SubprocessError):
+                continue
+        return None
 
     def monitor_ip(self, attempt):
         if attempt.wait(5):
@@ -393,21 +428,18 @@ class Runtime:
         while not attempt.is_set():
             address = None
             try:
-                result = run('curl', '--silent', '--fail', '--noproxy', '',
-                             '--proxy', f"socks5h://127.0.0.1:{1080 + self.p['slot']}",
-                             '--connect-timeout', '5', '--max-time', '10',
-                             '--proto', '=https', 'https://api.ipify.org', check=False)
-                if result.returncode == 0:
-                    candidate = ipaddress.ip_address(result.stdout.strip())
-                    if candidate.is_global:
-                        address = str(candidate)
+                address = self.discover_ip(attempt)
             except (OSError, ValueError, subprocess.SubprocessError):
                 pass
             with self.lock:
                 if attempt.is_set():
                     return
-                self.external_ip = address
-            if attempt.wait(300):
+                self.ip_status = 'available' if address else 'unavailable'
+                if self.p['kind'] in PERSONAL:
+                    self.external_ip = address
+                else:
+                    self.vpn_ip = address
+            if attempt.wait(300 if address and self.p['kind'] in PERSONAL else 30):
                 return
 
     def monitor_connection(self, attempt):
@@ -488,6 +520,8 @@ class Runtime:
             self.state = 'stopped'
             self.last_probe = None
             self.external_ip = None
+            self.vpn_ip = None
+            self.ip_status = 'pending'
             self.started_at = None
             self.retry_at = None
 

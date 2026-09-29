@@ -61,6 +61,7 @@ RUN chmod a+x /run.sh
 COPY --from=checkpoint /bundle /opt/checkpoint
 COPY snx-rs.sh /usr/local/bin/snx-rs
 COPY manager /app
+RUN python3 -c 'import os; from pathlib import Path; Path("/app/VERSION").write_text(os.environ.get("BUILD_VERSION") or "dev")'
 RUN chmod 755 /usr/local/bin/snx-rs && snx-rs --version
 
 CMD [ "/usr/bin/with-contenv", "python3", "/app/server.py" ]

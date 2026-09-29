@@ -13,11 +13,18 @@ body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display
 @media(max-width:1200px){.card{grid-template-columns:minmax(165px,1fr) minmax(290px,1.5fr) auto;gap:15px;padding:20px 18px}.card .actions>button{min-width:90px;padding:10px}.card .metrics{gap:10px}.workspace{padding-left:24px;padding-right:24px}.shell{grid-template-columns:180px minmax(0,1fr)}}
 @media(max-width:1000px){.card{grid-template-columns:minmax(0,1fr) auto;gap:18px}.card .metrics{grid-row:2;grid-column:1/-1;grid-template-columns:1.4fr 1fr 1fr;padding-top:15px;border-top:1px solid #243247}.card .actions{grid-row:1;grid-column:2}.card .card-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.card .card-head h2{margin:0}.protocol-label{margin-bottom:8px}}
 @media(max-width:760px){.shell{display:block}.workspace{padding-left:16px;padding-right:16px}.card{padding:19px 16px;gap:15px}.card .actions>button{min-width:0;font-size:10px;padding:10px}.card .actions{gap:6px}.card .metrics{gap:9px}.card .metric.wide strong{font-size:11px}.card .metric strong{font-size:13px}.card .metric small,.card .metric .sub{font-size:9px}.card-head h2{font-size:15px}.card p.connection-info{line-height:1.6}.more-actions>summary{width:32px;height:34px}.action-menu{width:220px}.card .actions>button.connect{color:#e0fff6}.list-help{line-height:1.6}}
-</style></head><body><div class="shell"><aside class="sidebar"><div class="brand"><div class="brand-mark" aria-hidden="true">⌁</div><div>Local Xray<small>NETWORK MANAGER</small></div></div><nav aria-label="Навигация"><div class="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div><div class="nav-item"><span aria-hidden="true">▦</span> Подключения</div></nav><div class="sidebar-foot">Home Assistant Add-on<br>Версия 0.7.6</div></aside><main class="workspace"><div class="eyebrow"><span class="live-dot"></span> Ваш VPN · под вашим контролем</div><div class="top"><div><div class="tag">LOCAL XRAY SOCKS · 0.7.6</div><h1>Подключения</h1></div><button class="primary" id="add">+ Добавить VPN</button></div>
+
+/* One workspace: no empty navigation column. */
+.shell{display:block}.workspace{max-width:1680px}.toolbar{flex-wrap:wrap}.toolbar h2{margin-right:auto}
+#toast{position:fixed;bottom:24px;right:24px;z-index:100;max-width:min(460px,calc(100vw - 32px));padding:16px 20px;border:1px solid #42615e;border-radius:12px;background:#18342e;color:#e2fff5;box-shadow:0 8px 30px #0007;white-space:pre-wrap}
+.card p.profile-feedback{margin:10px 0 0;color:#a3e6d2;font-size:12px;line-height:1.5}
+#order-help{color:#98b0c8;font-size:12px}.order-controls{display:flex;gap:5px;align-items:center;margin-bottom:12px}.order-controls button{padding:5px 10px;font-size:16px}.drag-handle{cursor:grab;font-size:26px;padding:0 10px;user-select:none}.card.dragging{opacity:.45}.card.drop-target{box-shadow:inset 0 3px #64d8b9,inset 0 -3px #64d8b9;background:#19312f}
+@media(max-width:600px){#toast{bottom:16px;right:16px}.toolbar .filters{width:100%}.filters button{flex:1}.workspace{padding:24px 16px}}
+</style></head><body><div class="shell"><main class="workspace"><div class="eyebrow"><span class="live-dot"></span> Ваш VPN · под вашим контролем</div><div class="top"><div><div class="tag">LOCAL XRAY SOCKS</div><h1>Подключения</h1></div><button class="primary" id="add">+ Добавить VPN</button></div>
 <p class="intro">Личные и рабочие сети в одном месте. Управляйте доступом, проверяйте соединения и следите за активностью.</p>
 <div id="notice" role="status"></div>
 <div class="overview" aria-label="Состояние аддона"><div><small>АКТИВНЫЕ ПРОФИЛИ</small><strong id="active_count">—</strong></div><div><small>CPU АДДОНА</small><strong id="cpu_load">—</strong></div><div><small>ПАМЯТЬ АДДОНА</small><strong id="memory_load">—</strong></div><div><small>ПРОФИЛИ</small><strong id="profile_count">—</strong></div></div>
-<div class="toolbar"><h2>Ваши сети</h2><div class="filters" aria-label="Фильтр подключений"><button class="selected" data-filter="all" aria-pressed="true">Все</button><button data-filter="active" aria-pressed="false">Активные</button><button data-filter="stopped" aria-pressed="false">Остановленные</button></div></div><div class="section-label"><span>Ваши подключения</span><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро</span></div><div id="cards"></div><footer class="dashboard-footer"><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро<br>Счётчики интерфейсов за сессию, включая служебный трафик</span><span>LOCAL XRAY / 0.7.8</span></footer></main></div>
+<div class="toolbar"><h2>Ваши сети</h2><button id="reorder" aria-pressed="false">Изменить порядок</button><div class="filters" aria-label="Фильтр подключений"><button class="selected" data-filter="all" aria-pressed="true">Все</button><button data-filter="active" aria-pressed="false">Активные</button><button data-filter="stopped" aria-pressed="false">Остановленные</button></div></div><div class="section-label"><span>Ваши подключения</span><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро</span></div><p id="order-help" hidden>Перетащите подключение за ⠿ или используйте стрелки. Порядок сохраняется автоматически.</p><div id="cards"></div><footer class="dashboard-footer"><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро<br>Счётчики интерфейсов за сессию, включая служебный трафик</span><span>LOCAL XRAY / <span data-version>…</span></span></footer></main></div>
 <dialog id="editor"><h2 id="heading">Новое подключение</h2><form id="form">
 <div class="grid"><label>Название<input name="name" required maxlength="80"></label><label>Порт SOCKS5<select name="slot"></select></label></div>
 <label>Протокол<select name="kind"><option value="vless">VLESS</option><option value="amneziawg">AmneziaWG</option><option value="openvpn">OpenVPN</option><option value="checkpoint">Check Point (snx-rs)</option></select></label>
@@ -53,14 +60,17 @@ body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display
 <label class="check"><input type="checkbox" id="clearsecrets">Очистить ранее сохранённые пароли</label>
 <div id="formerror" role="alert"></div><div class="actions"><button class="primary" type="submit">Сохранить</button><button type="button" id="cancel">Отмена</button></div></form></dialog>
 <dialog id="logdialog"><h2 id="logtitle">Журнал</h2><pre id="logtext"></pre><div class="actions"><button id="logbottom">↓ Вниз</button><button id="closelog">Закрыть</button></div></dialog>
+<div id="toast" role="status" aria-live="polite" hidden></div>
 <script>
 const $=s=>document.querySelector(s), form=$('#form');
-let profiles=[],editing=null,logid=null;
+let profiles=[],editing=null,logid=null,sorting=false,draggedId=null,reorderBusy=false,refreshSeq=0,toastTimer;
+const probeFeedback=new Map(),pendingProbes=new Set();
 async function api(path,data){
   const response=await fetch('api/'+path,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-VPN-Panel':'1'},body:JSON.stringify(data)});
   const result=await response.json();if(!response.ok)throw Error(result.error||'Ошибка запроса');return result;
 }
-function message(t){$('#notice').textContent=t}
+function message(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true},6500)}
+function feedback(id,text){probeFeedback.set(id,text);const el=document.querySelector('[data-profile="'+id+'"] .profile-feedback');if(el){el.textContent=text;el.hidden=!text}}
 function field(k){return form.elements.namedItem(k)}
 function kind(){const k=field('kind').value;for(const [id,visible]of Object.entries({cp:k==='checkpoint',ovpn:k==='openvpn',vless:k==='vless',awg:k==='amneziawg',personal:['vless','amneziawg'].includes(k),workfields:['openvpn','checkpoint'].includes(k),cp_certificate:k==='checkpoint'&&field('auth_mode').value==='certificate',account_credentials:k==='openvpn'||(k==='checkpoint'&&field('auth_mode').value==='password')}))$('#'+id).classList.toggle('hidden',!visible)}
 async function edit(profile){
@@ -89,17 +99,23 @@ let profileFilter='all';
 for(const button of document.querySelectorAll('[data-filter]'))button.onclick=()=>{profileFilter=button.dataset.filter;for(const item of document.querySelectorAll('[data-filter]')){item.classList.toggle('selected',item===button);item.setAttribute('aria-pressed',String(item===button))}refresh().catch(e=>message(e.message))};
 function bytes(value){if(value==null||!Number.isFinite(value))return '—';const units=['Б','КБ','МБ','ГБ','ТБ'];let i=0;while(value>=1024&&i<units.length-1){value/=1024;i++}return value.toFixed(i?1:0)+' '+units[i]}
 function metric(label,value,sub='',wide=false){const el=document.createElement('div');el.className='metric'+(wide?' wide':'');const l=document.createElement('small');l.textContent=label;const v=document.createElement('strong');v.textContent=value;el.append(l,v);if(sub){const d=document.createElement('div');d.className='sub';d.textContent=sub;el.append(d)}return el}
-async function refresh(){
-  const [items,status]=await Promise.all([api('profiles'),api('status')]);profiles=items;$('#cards').replaceChildren();
+async function refresh(force=false){
+  if(sorting&&!force)return;
+  const seq=++refreshSeq;
+  const [items,status]=await Promise.all([api('profiles'),api('status')]);
+  if(seq!==refreshSeq||(sorting&&!force))return;
+  profiles=items;$('#cards').replaceChildren();
+  for(const el of document.querySelectorAll('[data-version]'))el.textContent=status.version||'—';
+  $('#notice').textContent=status.notice||'';
   $('#active_count').textContent=profiles.filter(p=>p.state==='running_unverified').length;$('#profile_count').textContent=profiles.length+' / 9';
   $('#cpu_load').textContent=status.load?.cpu_percent==null?'—':status.load.cpu_percent.toFixed(1)+'%';$('#memory_load').textContent=bytes(status.load?.memory_bytes);
   $('#memory_load').title=status.load?.memory_limit?'Лимит: '+bytes(status.load.memory_limit):'Потребление памяти контейнера';
-  $('#add').disabled=profiles.length>=9;
+  $('#add').disabled=sorting||profiles.length>=9;
   if(!profiles.length){const p=document.createElement('p');p.className='empty';p.textContent='Здесь появятся ваши подключения. Добавьте первый VPN, чтобы начать.';$('#cards').append(p)}
   const visible=profiles.filter(p=>profileFilter==='all'||(profileFilter==='active'?['running_unverified','starting','retrying','stopping'].includes(p.state):['stopped','error'].includes(p.state)));
   if(profiles.length&&!visible.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='Нет подключений в этой категории';$('#cards').append(empty)}
   for(const p of visible){
-    const card=document.createElement('article');card.className='card';
+    const card=document.createElement('article');card.className='card';card.dataset.profile=p.id;
     const badge=document.createElement('div');badge.className='protocol-label';const icon=document.createElement('span');icon.className='protocol-icon';icon.textContent=({vless:'V',amneziawg:'A',openvpn:'O',checkpoint:'C'})[p.kind];const name=document.createElement('span');name.textContent=({vless:'VLESS',amneziawg:'AMNEZIA WG',openvpn:'OPENVPN',checkpoint:'CHECK POINT'})[p.kind];badge.append(icon,name);
     const h=document.createElement('h2');h.textContent=p.name;
     const state=document.createElement('div');state.className='status'+(p.state==='running_unverified'?' online':p.state==='error'?' error':'');
@@ -119,8 +135,10 @@ async function refresh(){
     const check=btn('Проверить подключение',async()=>{
       if(!['vless','amneziawg'].includes(p.kind)&&!p.probe_url){await edit(p);field('probe_url').focus();return}
       health.textContent='Проверяем связь через VPN…';
-      const r=await action(p,'probe');message(p.name+': '+(r.reachable?'сайт доступен через VPN':'нет ответа — проверьте журнал и адрес сайта'));
-    });check.disabled=p.state!=='running_unverified';
+      pendingProbes.add(p.id);feedback(p.id,'Проверяем связь через VPN…');
+      try{const r=await api('profiles/'+p.id+'/probe',{});feedback(p.id,(r.reachable?'✓ Сайт доступен через VPN':'✕ Нет ответа — проверьте журнал и адрес сайта')+(r.http_status&&r.http_status!=='000'?' · HTTP '+r.http_status:''));}
+      catch(e){feedback(p.id,'✕ '+e.message)}finally{pendingProbes.delete(p.id);await refresh()}
+    });check.disabled=p.state!=='running_unverified'||pendingProbes.has(p.id);
     a.append(['stopped','error'].includes(p.state)?start:stop,more);
     menu.append(btn('Настройки',()=>edit(p)),btn('Конфигурация',async()=>{
       const details=await api('profiles/'+p.id+'/details',{});logid=null;
@@ -132,13 +150,44 @@ async function refresh(){
     const head=document.createElement('div');head.className='card-head';head.append(h,state);
     const stats=document.createElement('div');stats.className='metrics';const m=p.metrics,t=m?.traffic;
     const uptime=m?Math.floor(m.uptime/3600)+' ч '+Math.floor(m.uptime%3600/60)+' мин':'';
-    stats.append(metric('Внешний IP через VPN',m?.external_ip||(m?'Недоступен / определяется':'—'),m?'Сессия: '+uptime:'Подключите профиль',true),metric('Из профиля',bytes(t?.rx_bytes),t?.rx_rate==null?'—':bytes(t.rx_rate)+'/с'),metric('В профиль',bytes(t?.tx_bytes),t?.tx_rate==null?'—':bytes(t.tx_rate)+'/с'));
+    const corporate=!['vless','amneziawg'].includes(p.kind);
+    stats.append(metric(corporate?'IP внутри VPN':'Внешний IP через VPN',(corporate?m?.vpn_ip:m?.external_ip)||(m?(m.ip_status==='unavailable'?'Пока недоступен':'Определяется…'):'—'),m?'Сессия: '+uptime:'Подключите профиль',true),metric('Из профиля',bytes(t?.rx_bytes),t?.rx_rate==null?'—':bytes(t.rx_rate)+'/с'),metric('В профиль',bytes(t?.tx_bytes),t?.tx_rate==null?'—':bytes(t.tx_rate)+'/с'));
     stats.title='Сетевой интерфейс профиля за текущую сессию, включая VPN-транспорт и прокси. Это не объём полезной загрузки.';
     const identity=document.createElement('div');identity.className='connection-identity';info.className='connection-info';info.textContent='SOCKS5 :'+p.port+' · TCP/UDP'+(p.dns_port?' · DNS :'+p.dns_port:'');identity.append(badge,head,info);
+    const result=document.createElement('p');result.className='profile-feedback';result.setAttribute('role','status');result.setAttribute('aria-live','polite');result.textContent=probeFeedback.get(p.id)||'';result.hidden=!result.textContent;identity.append(result);
     menu.insertBefore(btn('Состояние и DNS',()=>{logid=null;show([state.textContent,health.textContent,dns.textContent].filter(Boolean).join('\n\n'),'Состояние · '+p.name)}),menu.lastElementChild);
+    if(sorting){
+      const controls=document.createElement('div');controls.className='order-controls';
+      const handle=document.createElement('span');handle.textContent='⠿';handle.className='drag-handle';handle.draggable=true;handle.title='Перетащить '+p.name;handle.setAttribute('aria-hidden','true');
+      handle.addEventListener('dragstart',e=>{if(reorderBusy){e.preventDefault();return}draggedId=p.id;e.dataTransfer.setData('text/plain',p.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging')});
+      handle.addEventListener('dragend',()=>{draggedId=null;for(const el of document.querySelectorAll('.card'))el.classList.remove('dragging','drop-target')});
+      card.addEventListener('dragover',e=>{if(draggedId&&draggedId!==p.id&&!reorderBusy){e.preventDefault();e.dataTransfer.dropEffect='move';card.classList.add('drop-target')}});
+      card.addEventListener('dragleave',e=>{if(!card.contains(e.relatedTarget))card.classList.remove('drop-target')});
+      card.addEventListener('drop',e=>{e.preventDefault();card.classList.remove('drop-target');const id=draggedId;draggedId=null;if(id&&id!==p.id)moveProfile(id,p.id).catch(e=>message(e.message))});
+      const index=profiles.findIndex(item=>item.id===p.id);
+      const up=btn('↑',()=>moveProfile(p.id,profiles[index-1].id));up.setAttribute('aria-label','Переместить '+p.name+' вверх');up.disabled=index===0||reorderBusy;
+      const down=btn('↓',()=>moveProfile(p.id,profiles[index+1].id));down.setAttribute('aria-label','Переместить '+p.name+' вниз');down.disabled=index===profiles.length-1||reorderBusy;
+      controls.append(handle,up,down);identity.prepend(controls);
+      for(const button of a.querySelectorAll('button'))button.disabled=true;
+    }
     card.append(identity,stats,a);$('#cards').append(card);
   }
 }
+async function moveProfile(id,target){
+  if(reorderBusy)return;
+  const ids=profiles.map(p=>p.id),from=ids.indexOf(id),to=ids.indexOf(target);
+  if(from<0||to<0||from===to)return;
+  ids.splice(from,1);ids.splice(to,0,id);reorderBusy=true;$('#reorder').disabled=true;
+  for(const button of document.querySelectorAll('.order-controls button'))button.disabled=true;
+  try{await api('profiles/order',{ids})}
+  finally{reorderBusy=false;$('#reorder').disabled=false;await refresh(true)}
+}
+$('#reorder').onclick=async()=>{
+  sorting=!sorting;++refreshSeq;$('#reorder').textContent=sorting?'Готово':'Изменить порядок';$('#reorder').setAttribute('aria-pressed',String(sorting));$('#order-help').hidden=!sorting;
+  profileFilter='all';for(const button of document.querySelectorAll('[data-filter]')){button.disabled=sorting;button.classList.toggle('selected',button.dataset.filter==='all');button.setAttribute('aria-pressed',String(button.dataset.filter==='all'))}
+  $('#add').disabled=sorting||profiles.length>=9;
+  try{await refresh(true)}catch(e){message(e.message)}
+};
 document.addEventListener('click',e=>{for(const menu of document.querySelectorAll('.more-actions[open]'))if(!menu.contains(e.target))menu.open=false});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const menu of document.querySelectorAll('.more-actions[open]')){menu.open=false;menu.querySelector('summary').focus()}});
 field('kind').onchange=kind;
@@ -172,6 +221,6 @@ form.onsubmit=async e=>{
     await api('profiles',data);$('#editor').close();message('Профиль сохранён');await refresh();
   }catch(e){$('#formerror').textContent=e.message}finally{button.disabled=false}
 };
-refresh().then(()=>api('status')).then(r=>{if(r.notice)message(r.notice)}).catch(e=>message(e.message));kind();
+refresh().catch(e=>message(e.message));kind();
 setInterval(async()=>{try{if(!$('#editor').open&&!document.querySelector('.more-actions[open]')&&!document.querySelector('.actions button:focus'))await refresh();if(logid&&$('#logdialog').open)updateLog((await api('logs/'+logid)).text)}catch(e){message(e.message)}},5000);
 </script></body></html>

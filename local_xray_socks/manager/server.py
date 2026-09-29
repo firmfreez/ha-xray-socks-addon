@@ -19,6 +19,8 @@ from checkpoint import gateway_info
 
 ROOT = Path(os.environ.get('VPN_DATA', '/data/vpn-manager'))
 SECRET_FIELDS = ('password', 'cert_password', 'key_password', 'ovpn', 'link', 'amneziawg_config')
+VERSION_FILE = Path(__file__).parent / 'VERSION'
+VERSION = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else 'dev'
 
 
 class Manager:
@@ -43,6 +45,26 @@ class Manager:
             except (ValueError, TypeError, KeyError, OSError):
                 self.notice = 'Некоторые сохранённые профили повреждены и пропущены. Исходные файлы сохранены; остальные подключения доступны.'
                 print(f'Cannot load profile {file.parent.name}; original file retained.', flush=True)
+        try:
+            order = json.loads((root / 'order.json').read_text())
+            if not isinstance(order, list) or any(not isinstance(item, str) for item in order):
+                raise ValueError('Invalid order')
+            ids = list(dict.fromkeys(order + list(self.profiles)))
+            self.profiles = {ident: self.profiles[ident] for ident in ids if ident in self.profiles}
+        except (OSError, ValueError):
+            pass
+
+    def reorder(self, ids):
+        with self.lock:
+            if (not isinstance(ids, list) or any(not isinstance(item, str) for item in ids)
+                    or len(ids) != len(self.profiles) or set(ids) != set(self.profiles)):
+                raise ValueError('Список подключений изменился. Обновите страницу и повторите перемещение.')
+            tmp = self.root / 'order.tmp'
+            tmp.write_text(json.dumps(ids))
+            tmp.chmod(0o600)
+            tmp.replace(self.root / 'order.json')
+            self.profiles = {ident: self.profiles[ident] for ident in ids}
+            return {'ok': True}
 
     def public(self, p):
         result = {k: v for k, v in p.items() if k not in SECRET_FIELDS}
@@ -227,7 +249,7 @@ def handler(manager):
                 if path == '/api/ports':
                     return self.reply(200, manager.available_ports())
                 if path == '/api/status':
-                    return self.reply(200, {'notice': manager.notice, 'load': manager.load.sample()})
+                    return self.reply(200, {'notice': manager.notice, 'load': manager.load.sample(), 'version': VERSION})
                 if path.startswith('/api/logs/'):
                     runtime = manager.runtimes.get(path.rsplit('/', 1)[-1])
                     return self.reply(200, {'text': '\n'.join(list(runtime.logs)) if runtime else 'Профиль ещё не запускался'})
@@ -250,6 +272,8 @@ def handler(manager):
                     return self.reply(200, manager.checkpoint_info(data))
                 if parts == ['api', 'profiles']:
                     return self.reply(200, manager.save(data))
+                if parts == ['api', 'profiles', 'order']:
+                    return self.reply(200, manager.reorder(data.get('ids')))
                 if len(parts) == 4 and parts[:2] == ['api', 'profiles']:
                     return self.reply(200, manager.action(parts[2], parts[3], data))
                 self.reply(404, {'error': 'Not found'})
