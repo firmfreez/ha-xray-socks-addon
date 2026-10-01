@@ -88,6 +88,31 @@ class SSOTests(unittest.TestCase):
             self.assertIn('192.0.2.1 vpn.example', (root / 'netns' / runtime.ns / 'hosts').read_text())
             self.assertEqual((runtime.work / 'password').stat().st_mode & 0o777, 0o600)
 
+    def test_saved_credentials_only_enter_private_browser_queue(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(Manager, 'port_available', return_value=True):
+            manager = Manager(Path(tmp))
+            p = manager.save(self.profile(username='test-user', password='secret-value'))
+            runtime = Runtime(manager.profiles[p['id']], Path(tmp))
+            runtime.work, runtime.state = Path(tmp), 'starting'
+            manager.runtimes[p['id']] = runtime
+            state = {'session': 'current', 'expires_at': time.time() + 600}
+            (runtime.work / 'sso-state.json').write_text(json.dumps(state))
+            for field, expected in (('username', 'test-user'), ('password', 'secret-value')):
+                result = manager.action(p['id'], 'sso-input', dict(type='credential', field=field, session='current'))
+                self.assertNotIn(expected, json.dumps(result))
+                path = runtime.work / 'sso-input.json'
+                data = json.loads(path.read_text())
+                self.assertEqual(data['text'], expected)
+                self.assertTrue(data['replace'])
+                self.assertEqual(data['request'], result['request'])
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                path.unlink()
+            self.assertNotIn('secret-value', json.dumps(manager.public(manager.profiles[p['id']])))
+            self.assertNotIn('secret-value', json.dumps(manager.action(p['id'], 'sso-status', {})))
+            for values in ({'field': 'cert_password', 'session': 'current'}, {'field': 'password', 'session': 'old'}):
+                with self.assertRaises(ValueError):
+                    manager.action(p['id'], 'sso-input', dict(type='credential', **values))
+
     def test_input_is_bounded_and_cannot_execute_browser_commands(self):
         for data in ({'type': 'navigate', 'url': 'file:///data'}, {'type': 'text', 'text': 'x' * 4097},
                      {'type': 'click', 'x': True, 'y': 0}, {'type': 'click', 'x': 1000, 'y': 0},

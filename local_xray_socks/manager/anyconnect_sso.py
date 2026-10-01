@@ -32,7 +32,7 @@ def validate_input(data):
                 raise ValueError('Координаты вне окна входа')
         return {k: data[k] for k in ('type', 'x', 'y')}
     if kind == 'text' and isinstance(data.get('text'), str) and 0 < len(data['text']) <= 4096:
-        return {'type': kind, 'text': data['text']}
+        return {'type': kind, 'text': data['text'], 'replace': data.get('replace') is True}
     if kind == 'key' and data.get('key') in KEYS:
         return {'type': kind, 'key': data['key']}
     if kind == 'scroll' and type(data.get('delta')) is int and abs(data['delta']) <= 700:
@@ -60,10 +60,24 @@ class CDP:
 
     def input(self, data):
         data = validate_input(data)
+        self.call('Page.bringToFront')
         if data['type'] == 'click':
+            self.call('Input.dispatchMouseEvent', type='mouseMoved', x=data['x'], y=data['y'])
             for event in ('mousePressed', 'mouseReleased'):
                 self.call('Input.dispatchMouseEvent', type=event, x=data['x'], y=data['y'], button='left', clickCount=1)
         elif data['type'] == 'text':
+            focused = self.call('Runtime.evaluate', expression="""(() => {
+                let el = document.activeElement;
+                while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+                return !!el && (el.tagName === 'IFRAME' || el.isContentEditable ||
+                    ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !el.disabled && !el.readOnly));
+            })()""", returnByValue=True)['result'].get('value')
+            if not focused:
+                raise ValueError('Select an editable field before inserting text')
+            if data['replace']:
+                for event in ('rawKeyDown', 'keyUp'):
+                    self.call('Input.dispatchKeyEvent', type=event, key='a', code='KeyA',
+                              windowsVirtualKeyCode=65, modifiers=2)
             self.call('Input.insertText', text=data['text'])
         elif data['type'] == 'key':
             for event in ('keyDown', 'keyUp'):
@@ -126,9 +140,15 @@ def browser(work, uri):
             action = work / 'sso-input.json'
             if action.exists():
                 data = json.loads(action.read_text())
-                action.unlink(missing_ok=True)
                 if data.pop('session', None) == session:
-                    cdp.input(data)
+                    request = data.pop('request', None)
+                    try:
+                        cdp.input(data)
+                        state['last_input'] = {'request': request, 'ok': True}
+                    except Exception:
+                        state['last_input'] = {'request': request, 'ok': False}
+                    atomic(work / 'sso-state.json', json.dumps(state).encode())
+                action.unlink(missing_ok=True)
             frame = cdp.call('Page.getFrameTree')['frameTree']['frame']['url']
             parsed_frame = urlsplit(frame)
             state['origin'] = (parsed_frame.scheme + '://' + parsed_frame.netloc
@@ -147,7 +167,8 @@ def browser(work, uri):
             result = int(sys.stdin.readline())
             if result != -11:  # Linux EAGAIN: libopenconnect decides when SSO is complete.
                 return
-            shot = cdp.call('Page.captureScreenshot', format='png')['data']
+            shot = cdp.call('Page.captureScreenshot', format='png', captureBeyondViewport=False,
+                            clip={'x': 0, 'y': 0, 'width': WIDTH, 'height': HEIGHT, 'scale': 1})['data']
             atomic(work / 'sso-frame.png', base64.b64decode(shot))
             time.sleep(.3)
         raise TimeoutError('SSO timed out')

@@ -177,22 +177,34 @@ class Manager:
             return self.public(p)
 
     def action(self, ident, action, data):
-        if action == 'sso-input':
+        if action in ('sso-input', 'sso-status'):
             with self.lock:
                 runtime = self.runtimes.get(ident)
                 if not runtime:
                     raise ValueError('Окно SSO уже закрыто')
                 with runtime.lock:
                     state = self.sso_state(runtime)
+                    if action == 'sso-status':
+                        return state
                     if not state or data.get('session') != state['session']:
                         raise ValueError('Сессия SSO изменилась. Откройте окно снова.')
-                    value = validate_input(data)
+                    if data.get('type') == 'credential':
+                        field = data.get('field')
+                        if field not in ('username', 'password'):
+                            raise ValueError('Выберите логин или пароль')
+                        secret = runtime.p.get(field, '')
+                        if not secret:
+                            raise ValueError('Сначала сохраните ' + ('логин' if field == 'username' else 'пароль') + ' в настройках профиля')
+                        value = validate_input({'type': 'text', 'text': secret, 'replace': True})
+                    else:
+                        value = validate_input(data)
                     value['session'] = state['session']
+                    value['request'] = uuid.uuid4().hex
                     path = runtime.work / 'sso-input.json'
                     if path.exists():
                         raise ValueError('Предыдущее действие ещё выполняется')
                     atomic(path, json.dumps(value).encode())
-                    return {'ok': True}
+                    return {'ok': True, 'request': value['request']}
         if action == 'info':
             with self.lock:
                 p = self.profiles.get(ident)

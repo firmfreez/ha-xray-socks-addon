@@ -1,3 +1,13 @@
+# 0.9.2
+
+- Focus the SSO browser before mouse/keyboard input, fix screenshot bounds,
+  and acknowledge applied actions before sending the next action.
+- Add explicit Insert login / Insert password buttons for saved profile values.
+  Values travel only through private browser IPC; password values are not
+  returned to the panel. Saved credentials replace the selected field's content.
+- Keep account fields available in SSO profile settings; authentication remains
+  manual and credentials are inserted only when the corresponding button is used.
+
 # 0.9.1
 
 - Make the AnyConnect transport resolver and namespace host mappings readable
