@@ -137,7 +137,8 @@ class Runtime:
                         'invalid credentials', 'login failed', 'certificate verify failed')):
                     self.auth_failed.set()
                 if log and self.p['kind'] == 'anyconnect' and not self.auth_failed.is_set() and any(marker in line.lower() for marker in
-                       ('user input required in non-interactive mode', 'failed to complete authentication')):
+                       ('user input required in non-interactive mode', 'failed to complete authentication',
+                        'authentication form repeated; automatic submission stopped')):
                     self.auth_failed.set()
                     self.log('AnyConnect: вход не завершён. Проверьте логин, пароль, группу входа и поле MFA. '
                              'Повторный запрос Password может быть вторым фактором или отказом в первичном входе.', emit=False)
@@ -392,7 +393,10 @@ class Runtime:
                         '--reconnect-timeout', '1', '--force-dpd', '20', '--disable-ipv6']
                 if self.p.get('authgroup'):
                     args += ['--authgroup', self.p['authgroup']]
-                if self.p.get('mfa_form'):
+                if self.p.get('mfa_form') == 'main:password':
+                    self.log('Поле main:password содержит основной пароль. Ответ MFA для него отключён, '
+                             'чтобы не повторять отправку push в форму входа.')
+                elif self.p.get('mfa_form'):
                     args += ['--form-entry', self.p['mfa_form'] + '=' + self.p['mfa_value']]
                 else:
                     # Only known secondary-factor fields; never answer a repeated

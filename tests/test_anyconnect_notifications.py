@@ -85,7 +85,8 @@ class AnyConnectTests(unittest.TestCase):
             self.assertNotIn('SUPERVISOR_TOKEN', popen.call_args.kwargs['env'])
 
     def test_extra_input_is_terminal_and_does_not_retry(self):
-        for message in ('User input required in non-interactive mode', 'Failed to complete authentication'):
+        for message in ('User input required in non-interactive mode', 'Failed to complete authentication',
+                        'AnyConnect: authentication form repeated; automatic submission stopped'):
             with self.subTest(message=message):
                 r = Runtime(profile(), Path('/unused'))
                 with patch('runtime.subprocess.Popen') as popen:

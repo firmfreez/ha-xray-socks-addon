@@ -1,3 +1,12 @@
+# 0.8.3
+
+- Stop before resubmitting a complete primary username/password form; group
+  selection (NEWGROUP) does not consume the initial credential submission.
+- Cap authentication callbacks at eight; stop retries on a detected form loop.
+- Ignore saved MFA overrides for main:password rather than sending push into
+  repeated primary login forms. Preserve profiles and other MFA overrides.
+- Log only whether visible credential fields were populated, never their values.
+
 # 0.8.2
 
 - Log safe AnyConnect authentication form/field identifiers, types and callback
