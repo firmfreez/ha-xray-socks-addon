@@ -1,0 +1,4 @@
+FROM vpn-anyconnect-lab:local
+RUN apk add --no-cache chromium py3-websocket-client nss-tools build-base openconnect-dev openssl
+COPY local_xray_socks/manager /app
+RUN cc -shared -fPIC -Wall -Wextra -Werror /app/anyconnect_forms.c -o /usr/local/lib/anyconnect-forms.so -ldl -lopenconnect

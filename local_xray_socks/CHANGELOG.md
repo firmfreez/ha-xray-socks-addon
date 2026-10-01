@@ -1,3 +1,20 @@
+# 0.9.0
+
+- Add opt-in AnyConnect SSO/SAML web login through an ephemeral Chromium window
+  in Home Assistant Ingress and libopenconnect's public webview callback.
+- Enter account credentials and MFA manually; saved passwords and automatic
+  form answers are never supplied in SSO mode. Allow ten minutes for web login.
+- Isolate browser users per profile, keep TLS validation and corporate CA trust,
+  expire browser sessions and remove browser data after login or disconnect.
+- Existing password profiles retain their authentication mode. Browser-only
+  MFA requires manual login again after a new VPN authentication session.
+
+# 0.8.4
+
+- Explicitly send User-Agent AnyConnect to Cisco gateways. Older OpenConnect
+  defaults can be rejected with an HTTP 404 before the login/MFA flow begins.
+- Retain TLS validation, form-loop protection and safe form diagnostics.
+
 # 0.8.3
 
 - Stop before resubmitting a complete primary username/password form; group

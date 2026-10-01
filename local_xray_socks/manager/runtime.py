@@ -138,7 +138,8 @@ class Runtime:
                     self.auth_failed.set()
                 if log and self.p['kind'] == 'anyconnect' and not self.auth_failed.is_set() and any(marker in line.lower() for marker in
                        ('user input required in non-interactive mode', 'failed to complete authentication',
-                        'authentication form repeated; automatic submission stopped')):
+                        'authentication form repeated; automatic submission stopped',
+                        'sso authentication failed or timed out', 'no sso handler')):
                     self.auth_failed.set()
                     self.log('AnyConnect: вход не завершён. Проверьте логин, пароль, группу входа и поле MFA. '
                              'Повторный запрос Password может быть вторым фактором или отказом в первичном входе.', emit=False)
@@ -214,7 +215,7 @@ class Runtime:
                     if self.state == 'starting':
                         if tunnel == 'connected':
                             self.started()
-                        elif time.monotonic() - since > 180:
+                        elif time.monotonic() - since > (660 if self.p.get('anyconnect_auth') == 'sso' else 180):
                             reason = 'Истекло время ожидания входа / подтверждения MFA.'
                             self.log(reason)
                             break
@@ -381,14 +382,15 @@ class Runtime:
                 if self.p.get('key_password'):
                     args += ['--askpass', self.write('key-password', self.p['key_password'] + '\n')]
             elif self.p['kind'] == 'anyconnect':
-                self.write('password', self.p['password'] + '\n')
+                sso = self.p.get('anyconnect_auth') == 'sso'
+                self.write('password', '' if sso else self.p['password'] + '\n')
                 self.write('dns-manual', self.p['dns'])
                 (self.work / 'vpnc').mkdir(mode=0o700)
                 hook = self.write('anyconnect-hook', '#!/bin/sh\nexec python3 /app/anyconnect_hook.py '
                                   + shlex.quote(str(self.work)) + '\n')
                 Path(hook).chmod(0o755)
                 args = ['unshare', '--mount', '/bin/sh', '/app/anyconnect-start.sh', str(self.work),
-                        '--protocol=anyconnect', '--non-inter', '--passwd-on-stdin',
+                        '--protocol=anyconnect', '--useragent=AnyConnect', '--non-inter', '--passwd-on-stdin',
                         '--user', self.p['username'], '--interface', 'tun', '--script', hook,
                         '--reconnect-timeout', '1', '--force-dpd', '20', '--disable-ipv6']
                 if self.p.get('authgroup'):
@@ -405,8 +407,24 @@ class Runtime:
                         args += ['--form-entry', field + '=' + self.p.get('mfa_value', 'push')]
                 if self.p.get('anyconnect_ca'):
                     args += ['--cafile', str(self.directory / 'assets' / self.p['anyconnect_ca'])]
+                if sso:
+                    # No saved account credentials or automatic MFA answers in SSO.
+                    args = ['unshare', '--mount', '/bin/sh', '/app/anyconnect-start.sh', str(self.work),
+                            '--protocol=anyconnect', '--useragent=AnyConnect', '--non-inter',
+                            '--interface', 'tun', '--script', hook, '--reconnect-timeout', '1',
+                            '--force-dpd', '20', '--disable-ipv6']
+                    if self.p.get('authgroup'):
+                        args += ['--authgroup', self.p['authgroup']]
+                    if self.p.get('anyconnect_ca'):
+                        args += ['--cafile', str(self.directory / 'assets' / self.p['anyconnect_ca'])]
+                    args = ['env', 'ANYCONNECT_SSO_WORK=' + str(self.work),
+                            'ANYCONNECT_SSO_UID=' + str(64000 + self.p['slot']),
+                            'ANYCONNECT_SSO_CA=' + (str(self.directory / 'assets' / self.p['anyconnect_ca'])
+                                                   if self.p.get('anyconnect_ca') else '')] + args
                 args += [self.p['server']]
-                self.log('AnyConnect: ожидаем входа; подтвердите push на телефоне, если сервер его запросит.')
+                self.log('AnyConnect: откройте окно SSO в панели.' if sso else
+                         'AnyConnect: User-Agent=AnyConnect; ожидаем входа; '
+                         'подтвердите push на телефоне, если сервер его запросит.')
             else:
                 if not self.p['login_type']:
                     raise ValueError('Сначала получите и выберите login-type Check Point')

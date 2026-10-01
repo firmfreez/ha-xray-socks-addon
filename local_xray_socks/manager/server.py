@@ -17,6 +17,7 @@ from migration import migrate
 from telemetry import Load
 from checkpoint import gateway_info
 from ha_notify import phones
+from anyconnect_sso import validate_input, atomic
 
 ROOT = Path(os.environ.get('VPN_DATA', '/data/vpn-manager'))
 SECRET_FIELDS = ('password', 'cert_password', 'key_password', 'ovpn', 'link', 'amneziawg_config')
@@ -73,6 +74,7 @@ class Manager:
         result['files'] = sorted(x.name for x in (self.root / p['id'] / 'assets').iterdir())
         runtime = self.runtimes.get(p['id'])
         result['state'] = runtime.state if runtime else 'stopped'
+        result['sso'] = self.sso_state(runtime)
         result['port'] = 1080 + p['slot']
         result['dns_port'] = None if p['kind'] in PERSONAL else 10530 + p['slot']
         result['udp'] = True
@@ -83,6 +85,17 @@ class Manager:
                                 and runtime.state == 'running_unverified'
                                 and p['kind'] not in PERSONAL else None)
         return result
+
+    @staticmethod
+    def sso_state(runtime):
+        if not runtime or runtime.state != 'starting' or runtime.p.get('anyconnect_auth') != 'sso':
+            return None
+        try:
+            data = json.loads((runtime.work / 'sso-state.json').read_text())
+            import time
+            return data if data['expires_at'] > time.time() else None
+        except (OSError, ValueError, KeyError):
+            return None
 
     @staticmethod
     def port_available(port):
@@ -121,7 +134,7 @@ class Manager:
                        'cert_password', 'key_password', 'ovpn', 'certificate', 'ca_file', 'tunnel', 'autostart',
                        'link', 'amneziawg_config', 'loglevel', 'watchdog_enabled', 'watchdog_urls', 'probe_url', 'auth_mode',
                        'reconnect_enabled', 'reconnect_attempts', 'notify_disconnect', 'notify_targets',
-                       'authgroup', 'mfa_form', 'mfa_value', 'anyconnect_ca'}
+                       'authgroup', 'mfa_form', 'mfa_value', 'anyconnect_ca', 'anyconnect_auth'}
             p = validate({k: v for k, v in data.items() if k in allowed})
             if not self.port_available(1080 + p['slot']):
                 raise ValueError('Порт занят другим сервисом (TCP или UDP). Выберите свободный.')
@@ -164,6 +177,22 @@ class Manager:
             return self.public(p)
 
     def action(self, ident, action, data):
+        if action == 'sso-input':
+            with self.lock:
+                runtime = self.runtimes.get(ident)
+                if not runtime:
+                    raise ValueError('Окно SSO уже закрыто')
+                with runtime.lock:
+                    state = self.sso_state(runtime)
+                    if not state or data.get('session') != state['session']:
+                        raise ValueError('Сессия SSO изменилась. Откройте окно снова.')
+                    value = validate_input(data)
+                    value['session'] = state['session']
+                    path = runtime.work / 'sso-input.json'
+                    if path.exists():
+                        raise ValueError('Предыдущее действие ещё выполняется')
+                    atomic(path, json.dumps(value).encode())
+                    return {'ok': True}
         if action == 'info':
             with self.lock:
                 p = self.profiles.get(ident)
@@ -263,6 +292,17 @@ def handler(manager):
                 if path.startswith('/api/logs/'):
                     runtime = manager.runtimes.get(path.rsplit('/', 1)[-1])
                     return self.reply(200, {'text': '\n'.join(list(runtime.logs)) if runtime else 'Профиль ещё не запускался'})
+                if path.startswith('/api/sso-frame/'):
+                    runtime = manager.runtimes.get(path.rsplit('/', 1)[-1])
+                    state = manager.sso_state(runtime)
+                    from urllib.parse import parse_qs, urlsplit
+                    query = parse_qs(urlsplit(self.path).query)
+                    if state and query.get('session') == [state['session']]:
+                        try:
+                            return self.reply(200, (runtime.work / 'sso-frame.png').read_bytes(), 'image/png')
+                        except OSError:
+                            pass
+                    return self.reply(404, {'error': 'Окно SSO недоступно'})
             self.reply(404, {'error': 'Not found'})
 
         def do_POST(self):

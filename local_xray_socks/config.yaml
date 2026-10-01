@@ -1,5 +1,5 @@
 name: "Local Xray SOCKS"
-version: "0.8.3"
+version: "0.9.0"
 slug: "local_xray_socks"
 description: "VPN manager: VLESS, AmneziaWG, OpenVPN, Check Point and AnyConnect"
 url: "https://github.com/firmfreez/ha-xray-socks-addon"

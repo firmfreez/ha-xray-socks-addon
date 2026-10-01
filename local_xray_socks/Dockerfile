@@ -22,7 +22,7 @@ LABEL \
   io.hass.type="app" \
   io.hass.arch="${BUILD_ARCH}"
 
-RUN apk add --no-cache curl unzip jq bash iproute2 openresolv python3 openvpn openconnect vpnc socat iptables util-linux \
+RUN apk add --no-cache curl unzip jq bash iproute2 openresolv python3 openvpn openconnect vpnc socat iptables util-linux chromium py3-websocket-client nss-tools \
     && mkdir -p /run/vpnc \
     && test -x /etc/vpnc/vpnc-script
 
@@ -34,7 +34,7 @@ ARG AMNEZIAWG_TOOLS_VERSION="ee0f0a9aa34ff0a0da4b3433b9512781cfe02843"
 
 COPY manager/anyconnect_forms.c /tmp/anyconnect_forms.c
 RUN apk add --no-cache --virtual .build-deps build-base go linux-headers make openconnect-dev \
-    && cc -shared -fPIC -Wall -Wextra -Werror /tmp/anyconnect_forms.c -o /usr/local/lib/anyconnect-forms.so -ldl \
+    && cc -shared -fPIC -Wall -Wextra -Werror /tmp/anyconnect_forms.c -o /usr/local/lib/anyconnect-forms.so -ldl -lopenconnect \
     && rm /tmp/anyconnect_forms.c \
     && curl -L "https://github.com/amnezia-vpn/amneziawg-go/archive/${AMNEZIAWG_GO_VERSION}.tar.gz" -o /tmp/amneziawg-go.tar.gz \
     && mkdir -p /tmp/amneziawg-go \

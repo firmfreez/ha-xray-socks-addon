@@ -7,6 +7,13 @@ Home Assistant add-on repository with a local Xray-based SOCKS5 proxy for Raspbe
 - `local_xray_socks`: Runs Xray inside a Home Assistant add-on container and exposes a SOCKS5 port for LAN clients such as Keenetic.
 
 
+## Upgrade to 0.9.0
+
+AnyConnect profiles can now use SSO/SAML web login through a temporary browser
+window in the Home Assistant panel. Select web login in profile settings, connect,
+then open the SSO window and complete login/MFA manually. Existing password
+profiles keep their settings. See [setup instructions](local_xray_socks/DOCS.md).
+
 ## Upgrade to 0.8.0
 
 Cisco AnyConnect is now available through OpenConnect with password login and

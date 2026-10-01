@@ -51,6 +51,7 @@ class AnyConnectTests(unittest.TestCase):
                 r.start()
                 commands = [c.args[0] for c in spawn.call_args_list]
                 command = next(c for c in commands if '/app/anyconnect-start.sh' in c)
+                self.assertIn('--useragent=AnyConnect', command)
                 self.assertIn('main:secondary_password=push', command)
                 self.assertNotIn('secret', ' '.join(command))
                 self.assertEqual(r.state, 'starting')
@@ -111,6 +112,7 @@ class AnyConnectTests(unittest.TestCase):
                 r.start()
             commands = [c.args[0] for c in spawn.call_args_list]
             command = next(c for c in commands if '/app/anyconnect-start.sh' in c)
+            self.assertIn('--useragent=AnyConnect', command)
             self.assertIn('challenge:password=push', command)
             self.assertIn('main:secondary_password=push', command)
             self.assertFalse(any(arg.startswith('main:password=') for arg in command))

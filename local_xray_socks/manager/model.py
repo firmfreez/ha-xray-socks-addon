@@ -162,7 +162,10 @@ def validate(p):
         if p['mfa_form'] and not re.fullmatch(r'[A-Za-z0-9_-]+:[A-Za-z0-9_-]+', p['mfa_form']):
             raise ValueError('Поле MFA: имя_формы:имя_поля')
         p['anyconnect_ca'] = filename(p['anyconnect_ca']) if p.get('anyconnect_ca') else ''
-        if not p['username'] or not p['password']:
+        p['anyconnect_auth'] = p.get('anyconnect_auth', 'password')
+        if p['anyconnect_auth'] not in ('password', 'sso'):
+            raise ValueError('Выберите способ входа AnyConnect')
+        if p['anyconnect_auth'] == 'password' and (not p['username'] or not p['password']):
             raise ValueError('Введите логин и пароль AnyConnect')
     if p['kind'] == 'checkpoint':
         server = p['server'].strip()

@@ -52,8 +52,9 @@ body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display
 <small>Это сертификат центра, которому доверяет VPN-сервер, а не ваш личный .p12. При необходимости загрузите его ниже в дополнительных файлах и сначала сохраните профиль.</small>
 </div></details></div>
 <div id="anyconnect" class="protocol hidden">
+<label>Способ входа<select name="anyconnect_auth"><option value="password">Логин, пароль и MFA</option><option value="sso">Веб-вход SSO / SAML</option></select></label>
 <label>Группа входа (необязательно)<input name="authgroup" placeholder="Группа, выбранная в Cisco"></label>
-<small>После подключения подтвердите push на телефоне. Ожидание входа — до 3 минут. Сервер должен поддерживать вход через OpenConnect без браузера.</small>
+<small>Для SSO после подключения откройте «Веб-вход SSO» на карточке. Вводите логин и MFA в окне входа; сохранённый пароль не используется. На веб-вход даётся 10 минут. Для обычного входа подтвердите push на телефоне.</small>
 <details><summary>Дополнительные настройки AnyConnect / MFA</summary><div class="protocol">
 <label>Поле второго фактора (необязательно)<input name="mfa_form" placeholder="Например, main:secondary_password"></label>
 <label>Значение второго фактора<input name="mfa_value" value="push"></label>
@@ -74,6 +75,12 @@ body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display
 <label class="check"><input type="checkbox" id="clearsecrets">Очистить ранее сохранённые пароли</label>
 <div id="formerror" role="alert"></div><div class="actions"><button class="primary" type="submit">Сохранить</button><button type="button" id="cancel">Отмена</button></div></form></dialog>
 <dialog id="logdialog"><h2 id="logtitle">Журнал</h2><pre id="logtext"></pre><div class="actions"><button id="logbottom">↓ Вниз</button><button id="closelog">Закрыть</button></div></dialog>
+<dialog id="ssodialog" style="width:min(1060px,96vw)"><h2>Веб-вход SSO</h2>
+<p id="ssostatus" role="status">Загрузка окна…</p>
+<img id="ssoframe" alt="Окно корпоративного веб-входа" tabindex="0" style="width:100%;display:block;touch-action:manipulation">
+<p><small>Нажмите поле в окне, затем введите текст ниже и нажмите «Ввести». Enter и Tab доступны отдельными кнопками. MFA подтвердите на телефоне.</small></p>
+<div class="actions"><input id="ssotext" type="password" autocomplete="off" placeholder="Текст для выбранного поля" aria-label="Текст для выбранного поля"><button id="ssotype">Ввести</button><button id="ssoenter">Enter</button><button id="ssotab">Tab</button><button id="ssobackspace">⌫</button><button id="ssoclose">Закрыть окно</button></div>
+</dialog>
 <div id="toast" role="status" aria-live="polite" hidden></div>
 <script>
 const $=s=>document.querySelector(s), form=$('#form');
@@ -86,7 +93,7 @@ async function api(path,data){
 function message(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true},6500)}
 function feedback(id,text){probeFeedback.set(id,text);const el=document.querySelector('[data-profile="'+id+'"] .profile-feedback');if(el){el.textContent=text;el.hidden=!text}}
 function field(k){return form.elements.namedItem(k)}
-function kind(){const k=field('kind').value;for(const [id,visible]of Object.entries({cp:k==='checkpoint',anyconnect:k==='anyconnect',gateway:['checkpoint','anyconnect'].includes(k),ovpn:k==='openvpn',vless:k==='vless',awg:k==='amneziawg',personal:['vless','amneziawg'].includes(k),workfields:['openvpn','checkpoint','anyconnect'].includes(k),cp_certificate:k==='checkpoint'&&field('auth_mode').value==='certificate',account_credentials:['openvpn','anyconnect'].includes(k)||(k==='checkpoint'&&field('auth_mode').value==='password')}))$('#'+id).classList.toggle('hidden',!visible)}
+function kind(){const k=field('kind').value;for(const [id,visible]of Object.entries({cp:k==='checkpoint',anyconnect:k==='anyconnect',gateway:['checkpoint','anyconnect'].includes(k),ovpn:k==='openvpn',vless:k==='vless',awg:k==='amneziawg',personal:['vless','amneziawg'].includes(k),workfields:['openvpn','checkpoint','anyconnect'].includes(k),cp_certificate:k==='checkpoint'&&field('auth_mode').value==='certificate',account_credentials:k==='openvpn'||(k==='anyconnect'&&field('anyconnect_auth').value!=='sso')||(k==='checkpoint'&&field('auth_mode').value==='password')}))$('#'+id).classList.toggle('hidden',!visible)}
 async function edit(profile){
   await refresh();
   const p=profile?await api('profiles/'+profile.id+'/details',{}):null;
@@ -158,6 +165,7 @@ async function refresh(force=false){
       catch(e){feedback(p.id,'✕ '+e.message)}finally{pendingProbes.delete(p.id);await refresh()}
     });check.disabled=p.state!=='running_unverified'||pendingProbes.has(p.id);
     a.append(['stopped','error'].includes(p.state)?start:stop,more);
+    if(p.sso)a.insertBefore(btn('Веб-вход SSO',()=>openSSO(p)),more);
     menu.append(btn('Настройки',()=>edit(p)),btn('Конфигурация',async()=>{
       const details=await api('profiles/'+p.id+'/details',{});logid=null;
       const text=({vless:details.link,amneziawg:details.amneziawg_config,openvpn:details.ovpn})[p.kind]||JSON.stringify({server:details.server,tunnel:details.tunnel,login_type:details.login_type,username:details.username,certificate:details.certificate,ca_file:details.ca_file,dns:details.dns},null,2);
@@ -230,6 +238,7 @@ field('notify_disconnect').onchange=policies;
 $('#reload_phones').onclick=loadPhones;
 field('kind').onchange=kind;
 field('auth_mode').onchange=()=>{field('login_type').value='';kind()};
+field('anyconnect_auth').onchange=kind;
 field('server').oninput=()=>{field('login_type').replaceChildren(new Option('Определить автоматически при подключении',''));$('#cp_methods_hint').textContent='Адрес изменён — получите методы входа заново.'};
 $('#cp_certfile').onchange=e=>{const f=e.target.files[0];if(f)field('certificate').value='personal-certificate.'+(f.name.toLowerCase().endsWith('.pfx')?'pfx':'p12')};
 $('#cp_discover').onclick=async()=>{
@@ -263,6 +272,28 @@ form.onsubmit=async e=>{
     await api('profiles',data);$('#editor').close();message('Профиль сохранён');await refresh();
   }catch(e){$('#formerror').textContent=e.message}finally{button.disabled=false}
 };
+let ssoProfile=null,ssoTimer=null,ssoImageURL=null,ssoQueue=Promise.resolve();
+function closeSSO(){clearTimeout(ssoTimer);ssoProfile=null;$('#ssotext').value='';$('#ssoframe').removeAttribute('src');if(ssoImageURL)URL.revokeObjectURL(ssoImageURL);ssoImageURL=null}
+async function openSSO(p){closeSSO();ssoProfile=p;$('#ssostatus').textContent='Загрузка окна…';$('#ssodialog').showModal();await pollSSO()}
+async function pollSSO(){
+  const p=ssoProfile;if(!p)return;
+  try{
+    const list=await api('profiles'),current=list.find(x=>x.id===p.id);
+    if(!current?.sso||current.sso.session!==p.sso.session){$('#ssostatus').textContent=current?.state==='running_unverified'?'Вход завершён, VPN подключён.':'Окно входа закрыто. Проверьте состояние и журнал профиля.';closeSSO();await refresh();return}
+    $('#ssostatus').textContent='Сайт входа: '+(current.sso.origin||'загрузка…')+' · осталось '+Math.max(0,Math.ceil((current.sso.expires_at-Date.now()/1000)/60))+' мин';
+    const r=await fetch('api/sso-frame/'+p.id+'?session='+p.sso.session+'&t='+Date.now(),{cache:'no-store'});
+    if(r.ok){const url=URL.createObjectURL(await r.blob());if(ssoProfile!==p){URL.revokeObjectURL(url);return}const old=ssoImageURL;ssoImageURL=url;$('#ssoframe').src=url;if(old)URL.revokeObjectURL(old)}
+  }catch(e){if(ssoProfile===p)$('#ssostatus').textContent=e.message}
+  if(ssoProfile===p)ssoTimer=setTimeout(pollSSO,800);
+}
+function ssoInput(data){const p=ssoProfile;if(!p)return;ssoQueue=ssoQueue.then(async()=>{for(let attempt=0;attempt<25&&ssoProfile===p;attempt++){try{await api('profiles/'+p.id+'/sso-input',{...data,session:p.sso.session});return}catch(e){if(e.message==='Предыдущее действие ещё выполняется'&&attempt<24){await new Promise(r=>setTimeout(r,100));continue}message(e.message);return}}}).catch(e=>message(e.message))}
+$('#ssoframe').onclick=e=>{const r=e.currentTarget.getBoundingClientRect();ssoInput({type:'click',x:Math.min(999,Math.floor((e.clientX-r.left)*1000/r.width)),y:Math.min(699,Math.floor((e.clientY-r.top)*700/r.height))})};
+$('#ssoframe').onwheel=e=>{e.preventDefault();ssoInput({type:'scroll',delta:Math.max(-700,Math.min(700,Math.round(e.deltaY)))})};
+$('#ssoframe').onkeydown=e=>{if(['Enter','Tab','Backspace','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Delete'].includes(e.key)){e.preventDefault();ssoInput({type:'key',key:e.key})}else if(e.key.length===1&&!e.ctrlKey&&!e.metaKey){e.preventDefault();ssoInput({type:'text',text:e.key})}};
+$('#ssotype').onclick=()=>{const text=$('#ssotext').value;if(text){$('#ssotext').value='';ssoInput({type:'text',text})}};
+$('#ssotext').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#ssotype').click()}};
+for(const [id,key]of [['ssoenter','Enter'],['ssotab','Tab'],['ssobackspace','Backspace']])$('#'+id).onclick=()=>ssoInput({type:'key',key});
+$('#ssoclose').onclick=()=>$('#ssodialog').close();$('#ssodialog').addEventListener('close',closeSSO);
 refresh().catch(e=>message(e.message));kind();
 setInterval(async()=>{try{if(!$('#editor').open&&!document.querySelector('.more-actions[open]')&&!document.querySelector('.actions button:focus'))await refresh();if(logid&&$('#logdialog').open)updateLog((await api('logs/'+logid)).text)}catch(e){message(e.message)}},5000);
 </script></body></html>
