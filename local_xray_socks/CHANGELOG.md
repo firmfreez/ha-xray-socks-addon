@@ -1,3 +1,12 @@
+# 0.8.1
+
+- Answer standard AnyConnect secondary-password and challenge fields with the
+  configured MFA value (push by default), unless an explicit MFA form is selected.
+- Stop automatic recovery when AnyConnect reports unresolved interactive input
+  or incomplete authentication; explain that a repeated Password prompt can be
+  either MFA or rejection of the primary credentials.
+- Never automatically resubmit the primary password after rejection.
+
 # 0.8.0
 
 - Add Cisco AnyConnect profiles through OpenConnect: password login, server-driven

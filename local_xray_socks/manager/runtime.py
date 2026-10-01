@@ -136,6 +136,11 @@ class Runtime:
                        ('auth_failed', 'authentication failed', 'authentication failure',
                         'invalid credentials', 'login failed', 'certificate verify failed')):
                     self.auth_failed.set()
+                if log and self.p['kind'] == 'anyconnect' and any(marker in line.lower() for marker in
+                       ('user input required in non-interactive mode', 'failed to complete authentication')):
+                    self.auth_failed.set()
+                    self.log('AnyConnect: вход не завершён. Проверьте логин, пароль, группу входа и поле MFA. '
+                             'Повторный запрос Password может быть вторым фактором или отказом в первичном входе.', emit=False)
                 self.log(('' if log else '[runtime] ') + line.rstrip(), emit=False)
         proc.log_reader = threading.Thread(target=reader, daemon=True)
         proc.log_reader.start()
@@ -388,6 +393,11 @@ class Runtime:
                     args += ['--authgroup', self.p['authgroup']]
                 if self.p.get('mfa_form'):
                     args += ['--form-entry', self.p['mfa_form'] + '=' + self.p['mfa_value']]
+                else:
+                    # Only known secondary-factor fields; never answer a repeated
+                    # primary main:password prompt with push or the password.
+                    for field in ('main:secondary_password', 'main:password2', 'challenge:password', 'challenge:answer'):
+                        args += ['--form-entry', field + '=' + self.p.get('mfa_value', 'push')]
                 if self.p.get('anyconnect_ca'):
                     args += ['--cafile', str(self.directory / 'assets' / self.p['anyconnect_ca'])]
                 args += [self.p['server']]

@@ -57,7 +57,7 @@ body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display
 <details><summary>Дополнительные настройки AnyConnect / MFA</summary><div class="protocol">
 <label>Поле второго фактора (необязательно)<input name="mfa_form" placeholder="Например, main:secondary_password"></label>
 <label>Значение второго фактора<input name="mfa_value" value="push"></label>
-<small>Оставьте поле второго фактора пустым, если сервер отправляет push автоматически. Если сервер требует выбор push, укажите имя формы и поля, например main:secondary_password или main:password2. Значение обычно push; уточните у администратора VPN.</small>
+<small>Пустое поле включает автоматический ответ для стандартных MFA-полей (secondary_password, password2 и challenge). При необходимости укажите точное поле, например main:secondary_password или challenge:password. Значение обычно push; уточните у администратора VPN. Повторный запрос основного пароля не заполняется автоматически.</small>
 <label>Имя файла корпоративного CA (необязательно)<input name="anyconnect_ca" placeholder="company-ca.pem"></label>
 </div></details></div>
 <div id="workfields" class="protocol"><div class="grid" id="account_credentials"><label>Логин<input name="username" autocomplete="off"></label><label>Пароль<input name="password" type="password" autocomplete="new-password"></label></div>

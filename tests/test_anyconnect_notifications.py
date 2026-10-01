@@ -84,6 +84,37 @@ class AnyConnectTests(unittest.TestCase):
             popen.return_value.log_reader.join(1)
             self.assertNotIn('SUPERVISOR_TOKEN', popen.call_args.kwargs['env'])
 
+    def test_extra_input_is_terminal_and_does_not_retry(self):
+        for message in ('User input required in non-interactive mode', 'Failed to complete authentication'):
+            with self.subTest(message=message):
+                r = Runtime(profile(), Path('/unused'))
+                with patch('runtime.subprocess.Popen') as popen:
+                    popen.return_value.stdout = iter([message + '\n'])
+                    r.spawn(['openconnect'])
+                    popen.return_value.log_reader.join(1)
+                self.assertTrue(r.auth_failed.is_set())
+                with patch.object(r, '_start', side_effect=lambda: setattr(r, 'state', 'running_unverified')), \
+                     patch.object(r, '_cleanup'), patch.object(r.cancelled, 'wait', return_value=False) as wait:
+                    r.supervise()
+                self.assertEqual(r.state, 'error')
+                self.assertEqual(wait.call_args_list, [unittest.mock.call(2)])
+
+    def test_default_mfa_only_answers_secondary_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            r = Runtime(profile(), root)
+            r.work = root / 'run'
+            with patch('runtime.NETNS_ROOT', root / 'netns'), \
+                 patch('runtime.endpoint_addresses', return_value=['192.0.2.1']), \
+                 patch('runtime.run', return_value=MagicMock(stdout='1')), patch.object(r, 'spawn') as spawn:
+                r.start()
+            commands = [c.args[0] for c in spawn.call_args_list]
+            command = next(c for c in commands if '/app/anyconnect-start.sh' in c)
+            self.assertIn('challenge:password=push', command)
+            self.assertIn('main:secondary_password=push', command)
+            self.assertFalse(any(arg.startswith('main:password=') for arg in command))
+            self.assertNotIn('secret', ' '.join(command))
+
 
 class PolicyTests(unittest.TestCase):
     def runtime(self, **changes):
