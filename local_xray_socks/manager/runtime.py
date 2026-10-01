@@ -17,6 +17,8 @@ from telemetry import Traffic
 from model import ovpn_config, PERSONAL, personal_options
 from vpn_dns import publish, read_state, resolver_state
 from checkpoint import gateway_info
+from ha_notify import disconnected
+from urllib.parse import urlsplit
 
 NETNS_ROOT = Path('/etc/netns')
 HOSTS_FILE = Path('/etc/hosts')
@@ -79,6 +81,8 @@ class Runtime:
         self.retryable = True
         self.retry_at = None
         self.auth_failed = threading.Event()
+        self.reconnect_count = 0
+        self.outage_notified = False
 
     @property
     def active(self):
@@ -87,6 +91,7 @@ class Runtime:
     def start_personal(self, prefix):
         options = self.write('options.json', json.dumps(personal_options(self.p)))
         self.spawn(prefix + ['env', 'S6_KEEP_ENV=1', f'VPN_OPTIONS_FILE={options}',
+                            'VPN_MANAGER_SUPERVISED=1',
                             f'VPN_RUNTIME_DIR={self.work}', f"AWG_INTERFACE=awg{self.p['slot']}",
                             f"SOCKS_PORT={1080 + self.p['slot']}",
                             f'SOCKS_UDP_IP={self.peer if prefix else "0.0.0.0"}', '/run.sh'])
@@ -115,9 +120,12 @@ class Runtime:
             print(f'[{self.ns}] {entry}', flush=True)
 
     def spawn(self, args, log=True):
+        child_env = dict(os.environ)
+        # VPN engines and namespace hooks do not need the HA bearer token.
+        child_env.pop('SUPERVISOR_TOKEN', None)
         proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 stdin=subprocess.DEVNULL, start_new_session=True,
-                                text=True, bufsize=1)
+                                text=True, bufsize=1, env=child_env)
         self.children.append(proc)
         attempt = self.stopping
         def reader():
@@ -162,6 +170,9 @@ class Runtime:
             except Exception as cleanup_error:
                 self.log('Не удалось очистить ресурсы профиля: ' + str(cleanup_error))
             self.state = 'error'
+            if not self.cancelled.is_set() and self.p.get('notify_disconnect') and not self.outage_notified:
+                self.outage_notified = True
+                self.notify_disconnect('Ошибка управления подключением. Откройте журнал VPN.')
 
     def _supervise(self):
         delay = 5
@@ -172,34 +183,67 @@ class Runtime:
                 self._start()
             since = time.monotonic()
             failures, checked = 0, None
-            while self.state == 'running_unverified' and not self.cancelled.wait(2):
+            reason = 'Не удалось запустить подключение.'
+            while self.state in ('running_unverified', 'starting') and not self.cancelled.wait(2):
                 if self.auth_failed.is_set():
                     self.retryable = False
                     self.log('Авторизация или проверка сертификата отклонена. Исправьте настройки и подключите профиль снова.')
+                    reason = 'Сервер отклонил авторизацию или сертификат.'
                     break
                 if any(p.poll() is not None for p in self.children):
                     # Read the final AUTH_FAILED line before deciding to retry.
                     for proc in self.children:
                         if proc.poll() is not None and hasattr(proc, 'log_reader'):
                             proc.log_reader.join(timeout=1)
-                    self.log('Процесс профиля завершился; восстанавливаем только это подключение.')
+                    self.log('Процесс профиля завершился.')
+                    reason = 'Процесс VPN завершился.'
                     break
+                if self.p['kind'] == 'anyconnect':
+                    marker = self.work / 'tunnel-state'
+                    tunnel = marker.read_text() if marker.exists() else ''
+                    if tunnel == 'disconnected':
+                        reason = 'Туннель AnyConnect отключён.'
+                        break
+                    if self.state == 'starting':
+                        if tunnel == 'connected':
+                            self.started()
+                        elif time.monotonic() - since > 180:
+                            reason = 'Истекло время ожидания входа / подтверждения MFA.'
+                            self.log(reason)
+                            break
+                        else:
+                            continue
                 probe = self.last_probe
-                # Personal VPNs already have a watchdog inside run.sh.
-                if (self.p['kind'] not in PERSONAL and self.p.get('watchdog_enabled', True)
+                if (self.p.get('watchdog_enabled', True)
                         and probe and probe['checked_at'] != checked):
                     checked = probe['checked_at']
                     failures = 0 if probe['reachable'] else failures + 1
                     if failures >= 3:
-                        self.log('Три проверки рабочего сайта не прошли; переподключаем профиль.')
+                        self.log('Три проверки сайта не прошли.')
+                        reason = 'Три проверки связи через VPN не прошли.'
                         break
+                if probe and probe['reachable']:
+                    self.outage_notified = False
+                    self.reconnect_count = 0
+                elif self.p['kind'] not in PERSONAL and not self.p.get('probe_url') and time.monotonic() - since >= 120:
+                    self.outage_notified = False
+                    self.reconnect_count = 0
             with self.lock:
                 if self.cancelled.is_set():
                     return
                 self._cleanup()
+                if self.p.get('notify_disconnect') and not self.outage_notified:
+                    self.outage_notified = True
+                    threading.Thread(target=self.notify_disconnect, args=(reason,), daemon=True).start()
                 if not self.retryable or self.auth_failed.is_set():
                     if self.auth_failed.is_set():
                         self.log('Автоповтор отключён после ошибки авторизации или сертификата.')
+                    self.state = 'error'
+                    return
+                limit = self.p.get('reconnect_attempts', 'always')
+                if (not self.p.get('reconnect_enabled', True)
+                        or limit != 'always' and self.reconnect_count >= limit):
+                    self.log('Переподключение отключено или исчерпан лимит попыток.')
                     self.state = 'error'
                     return
                 if time.monotonic() - since >= 120:
@@ -209,7 +253,15 @@ class Runtime:
                 self.log(f'Повторное подключение через {delay} с. Другие профили продолжают работать.')
             if self.cancelled.wait(delay):
                 return
+            self.reconnect_count += 1
             delay = min(delay * 2, 300)
+
+    def notify_disconnect(self, reason):
+        try:
+            disconnected(self.p, reason)
+            self.log('Уведомление об отключении отправлено в Home Assistant.')
+        except (OSError, ValueError):
+            self.log('Не удалось отправить уведомление. Проверьте доступ к HA и выбранные телефоны.')
 
     def _start(self):
         if self.state not in ('stopped', 'error', 'starting', 'retrying'):
@@ -235,6 +287,8 @@ class Runtime:
             hosts = []
             if self.p['kind'] == 'checkpoint':
                 hosts.append(self.p['server'].split(':')[0])
+            elif self.p['kind'] == 'anyconnect':
+                hosts.append(urlsplit(self.p['server']).hostname)
             elif self.p['kind'] == 'openvpn':
                 block = False
                 for line in self.p['ovpn'].splitlines():
@@ -285,6 +339,12 @@ class Runtime:
                 self.start_bridge()
                 self.started()
                 return
+            if self.p['kind'] == 'anyconnect':
+                upstreams = [line.split()[1] for line in RESOLV_FILE.read_text().splitlines()
+                             if line.startswith('nameserver ') and len(line.split()) > 1]
+                self.spawn(['python3', '/app/dns_forward.py', self.gateway, ','.join(upstreams), '53'], log=False)
+                (nsdir / 'resolv.conf').write_text(f'nameserver {self.gateway}\n')
+                self.write('transport-resolv.conf', f'nameserver {self.gateway}\n')
             # Only replies on the veth are allowed for the unprivileged SOCKS user.
             # VPN transport runs as root. Direct SOCKS/DNS fallbacks are rejected.
             run(*ns, 'iptables', '-A', 'OUTPUT', '-m', 'conntrack', '--ctstate', 'ESTABLISHED,RELATED', '-j', 'ACCEPT')
@@ -313,6 +373,25 @@ class Runtime:
                         '--up-restart', '--verb', '3', '--auth-retry', 'none']
                 if self.p.get('key_password'):
                     args += ['--askpass', self.write('key-password', self.p['key_password'] + '\n')]
+            elif self.p['kind'] == 'anyconnect':
+                self.write('password', self.p['password'] + '\n')
+                self.write('dns-manual', self.p['dns'])
+                (self.work / 'vpnc').mkdir(mode=0o700)
+                hook = self.write('anyconnect-hook', '#!/bin/sh\nexec python3 /app/anyconnect_hook.py '
+                                  + shlex.quote(str(self.work)) + '\n')
+                Path(hook).chmod(0o755)
+                args = ['unshare', '--mount', '/bin/sh', '/app/anyconnect-start.sh', str(self.work),
+                        '--protocol=anyconnect', '--non-inter', '--passwd-on-stdin',
+                        '--user', self.p['username'], '--interface', 'tun', '--script', hook,
+                        '--reconnect-timeout', '1', '--force-dpd', '20', '--disable-ipv6']
+                if self.p.get('authgroup'):
+                    args += ['--authgroup', self.p['authgroup']]
+                if self.p.get('mfa_form'):
+                    args += ['--form-entry', self.p['mfa_form'] + '=' + self.p['mfa_value']]
+                if self.p.get('anyconnect_ca'):
+                    args += ['--cafile', str(self.directory / 'assets' / self.p['anyconnect_ca'])]
+                args += [self.p['server']]
+                self.log('AnyConnect: ожидаем входа; подтвердите push на телефоне, если сервер его запросит.')
             else:
                 if not self.p['login_type']:
                     raise ValueError('Сначала получите и выберите login-type Check Point')
@@ -356,7 +435,8 @@ class Runtime:
                             dns_input], log=False)
             for incoming, outgoing in [('TCP4-LISTEN', 'TCP4'), ('UDP4-RECVFROM', 'UDP4')]:
                 self.spawn(['socat', '-T', '10', f"{incoming}:{10530 + self.p['slot']},fork,reuseaddr", f'{outgoing}:{self.peer}:5353'], log=False)
-            self.started()
+            if self.p['kind'] != 'anyconnect':
+                self.started()
         except Exception as exc:
             self.retryable = not isinstance(exc, ValueError)
             self.log('Ошибка запуска: ' + str(exc))

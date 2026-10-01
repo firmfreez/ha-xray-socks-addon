@@ -1,3 +1,16 @@
+# 0.8.0
+
+- Add Cisco AnyConnect profiles through OpenConnect: password login, server-driven
+  mobile push MFA, auth group and optional second-factor form response.
+- Isolate AnyConnect routes, resolver and vpnc state per profile; publish server DNS
+  and wait for the tunnel hook before reporting the connection as started.
+- Add per-profile reconnect switch and either a finite retry limit or Always.
+  Centralize recovery for VLESS/AmneziaWG so internal restarts cannot bypass limits.
+- Add opt-in per-profile disconnect pushes to selected Home Assistant mobile app
+  notification services. One notification per outage; manual stops do not notify.
+- Enable Home Assistant Core API access through Supervisor. VPN child processes
+  no longer inherit the Supervisor bearer token.
+
 # 0.7.8
 
 - Start and recover profiles independently; unavailable Check Point discovery or

@@ -5,7 +5,7 @@ import shlex
 from urllib.parse import urlsplit
 from vless import outbound
 
-KINDS = ('vless', 'amneziawg', 'openvpn', 'checkpoint')
+KINDS = ('vless', 'amneziawg', 'openvpn', 'checkpoint', 'anyconnect')
 PERSONAL = ('vless', 'amneziawg')
 SLOTS = range(9)
 
@@ -118,6 +118,21 @@ def validate(p):
     if p['loglevel'] not in ('none', 'error', 'warning', 'info', 'debug'):
         raise ValueError('Неизвестный уровень журнала')
     p['watchdog_enabled'] = p.get('watchdog_enabled', True) is True
+    p['reconnect_enabled'] = p.get('reconnect_enabled', True) is True
+    limit = p.get('reconnect_attempts', 'always')
+    if limit != 'always':
+        if isinstance(limit, bool) or not re.fullmatch(r'[0-9]{1,4}', str(limit)) or not 1 <= int(limit) <= 1000:
+            raise ValueError('Количество повторов: 1–1000 или Всегда')
+        limit = int(limit)
+    p['reconnect_attempts'] = limit
+    p['notify_disconnect'] = p.get('notify_disconnect', False) is True
+    targets = p.get('notify_targets', [])
+    if not isinstance(targets, list) or len(targets) > 50 or any(
+            not isinstance(t, str) or not re.fullmatch(r'mobile_app_[a-z0-9_]+', t) for t in targets):
+        raise ValueError('Выберите телефоны Home Assistant')
+    p['notify_targets'] = list(dict.fromkeys(targets))
+    if p['notify_disconnect'] and not targets:
+        raise ValueError('Выберите хотя бы один телефон для уведомлений')
     p['watchdog_urls'] = p.get('watchdog_urls', '')
     if not isinstance(p['watchdog_urls'], str):
         raise ValueError('Ожидаются URL проверки')
@@ -126,6 +141,29 @@ def validate(p):
         if not isinstance(value, str) or any(c in value for c in '\r\n\x00'):
             raise ValueError(f'Недопустимое значение: {key}')
         p[key] = value
+    if p['kind'] == 'anyconnect':
+        server = p['server'].strip()
+        if '://' not in server:
+            server = 'https://' + server
+        url = urlsplit(server)
+        if (url.scheme != 'https' or not url.hostname or url.username or url.password
+                or url.query or url.fragment or any(c.isspace() for c in server)):
+            raise ValueError('Укажите HTTPS-адрес сервера AnyConnect')
+        try:
+            url.port
+        except ValueError:
+            raise ValueError('Некорректный порт AnyConnect') from None
+        p['server'] = server
+        for key, default in (('authgroup', ''), ('mfa_form', ''), ('mfa_value', 'push')):
+            value = p.get(key, default)
+            if not isinstance(value, str) or len(value) > 200 or any(c in value for c in '\r\n\x00'):
+                raise ValueError('Недопустимое значение: ' + key)
+            p[key] = value
+        if p['mfa_form'] and not re.fullmatch(r'[A-Za-z0-9_-]+:[A-Za-z0-9_-]+', p['mfa_form']):
+            raise ValueError('Поле MFA: имя_формы:имя_поля')
+        p['anyconnect_ca'] = filename(p['anyconnect_ca']) if p.get('anyconnect_ca') else ''
+        if not p['username'] or not p['password']:
+            raise ValueError('Введите логин и пароль AnyConnect')
     if p['kind'] == 'checkpoint':
         server = p['server'].strip()
         if server.startswith('https://'):

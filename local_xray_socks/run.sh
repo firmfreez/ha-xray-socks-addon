@@ -531,6 +531,7 @@ AMNEZIAWG_PROFILE="$(profile_config 'amneziawg_profile')"
 AMNEZIAWG_CONFIG=""
 LOGLEVEL="$(profile_config 'loglevel')"
 WATCHDOG_ENABLED="$(profile_config 'watchdog_enabled')"
+if [ "${VPN_MANAGER_SUPERVISED:-0}" = 1 ]; then WATCHDOG_ENABLED=false; fi
 WATCHDOG_URLS="$(profile_config 'watchdog_urls')"
 if [ -z "${WATCHDOG_URLS}" ] || [ "${WATCHDOG_URLS}" = "null" ]; then
   WATCHDOG_URLS="https://www.cloudflare.com/cdn-cgi/trace,https://www.google.com/generate_204"
@@ -612,6 +613,10 @@ bashio::log.info "Starting Xray on SOCKS5 port ${SOCKS_PORT}"
 /usr/local/bin/xray run -config "${XRAY_DIR}/config.json" &
 XRAY_PID=$!
 supervise_runtime
+if [ "${VPN_MANAGER_SUPERVISED:-0}" = 1 ]; then
+  cleanup_runtime
+  exit 1
+fi
 bashio::log.warning "Restarting VPN processes in 30 seconds"
 cleanup_runtime
 sleep 30

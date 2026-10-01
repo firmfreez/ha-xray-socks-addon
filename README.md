@@ -7,6 +7,14 @@ Home Assistant add-on repository with a local Xray-based SOCKS5 proxy for Raspbe
 - `local_xray_socks`: Runs Xray inside a Home Assistant add-on container and exposes a SOCKS5 port for LAN clients such as Keenetic.
 
 
+## Upgrade to 0.8.0
+
+Cisco AnyConnect is now available through OpenConnect with password login and
+mobile push MFA (server compatibility must be verified). Each profile has its
+own reconnect switch, finite retry limit or Always, and optional disconnect
+notifications to selected Home Assistant Companion phones. Manual stops do not
+notify. See [setup instructions](local_xray_socks/DOCS.md).
+
 ## Upgrade to 0.7.8
 
 Profiles start and recover independently. Temporary endpoint DNS failures and

@@ -16,6 +16,7 @@ from runtime import Runtime
 from migration import migrate
 from telemetry import Load
 from checkpoint import gateway_info
+from ha_notify import phones
 
 ROOT = Path(os.environ.get('VPN_DATA', '/data/vpn-manager'))
 SECRET_FIELDS = ('password', 'cert_password', 'key_password', 'ovpn', 'link', 'amneziawg_config')
@@ -118,7 +119,9 @@ class Manager:
                 raise ValueError('Слишком много файлов')
             allowed = {'name', 'kind', 'slot', 'dns', 'server', 'login_type', 'username', 'password',
                        'cert_password', 'key_password', 'ovpn', 'certificate', 'ca_file', 'tunnel', 'autostart',
-                       'link', 'amneziawg_config', 'loglevel', 'watchdog_enabled', 'watchdog_urls', 'probe_url', 'auth_mode'}
+                       'link', 'amneziawg_config', 'loglevel', 'watchdog_enabled', 'watchdog_urls', 'probe_url', 'auth_mode',
+                       'reconnect_enabled', 'reconnect_attempts', 'notify_disconnect', 'notify_targets',
+                       'authgroup', 'mfa_form', 'mfa_value', 'anyconnect_ca'}
             p = validate({k: v for k, v in data.items() if k in allowed})
             if not self.port_available(1080 + p['slot']):
                 raise ValueError('Порт занят другим сервисом (TCP или UDP). Выберите свободный.')
@@ -145,6 +148,8 @@ class Manager:
                 for key in ('certificate', 'ca_file'):
                     if p.get(key) and p[key] not in existing | decoded.keys():
                         raise ValueError('Загрузите файл ' + p[key])
+            elif p['kind'] == 'anyconnect' and p['anyconnect_ca'] and p['anyconnect_ca'] not in existing | decoded.keys():
+                raise ValueError('Загрузите файл ' + p['anyconnect_ca'])
             assets.mkdir(parents=True, exist_ok=True, mode=0o700)
             for name, content in decoded.items():
                 path = assets / name
@@ -243,6 +248,11 @@ def handler(manager):
             path = self.path.split('?')[0]
             if path in ('/', '/index.html'):
                 return self.reply(200, (Path(__file__).parent / 'index.html').read_bytes(), 'text/html; charset=utf-8')
+            if path == '/api/phones':
+                try:
+                    return self.reply(200, phones())
+                except (OSError, ValueError):
+                    return self.reply(502, {'error': 'Не удалось получить телефоны HA. Проверьте доступ аддона к Home Assistant API.'})
             with manager.lock:
                 if path == '/api/profiles':
                     return self.reply(200, [manager.public(p) for p in manager.profiles.values()])

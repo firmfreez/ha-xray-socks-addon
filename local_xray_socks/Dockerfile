@@ -22,7 +22,9 @@ LABEL \
   io.hass.type="app" \
   io.hass.arch="${BUILD_ARCH}"
 
-RUN apk add --no-cache curl unzip jq bash iproute2 openresolv python3 openvpn socat iptables util-linux
+RUN apk add --no-cache curl unzip jq bash iproute2 openresolv python3 openvpn openconnect vpnc socat iptables util-linux \
+    && mkdir -p /run/vpnc \
+    && test -x /etc/vpnc/vpnc-script
 
 # Keep the engine and its userspace configuration tools on compatible AWG 3.1
 # revisions. The tools project did not publish an AWG 3.1 tag yet, so pin the

@@ -27,13 +27,13 @@ body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display
 <div class="toolbar"><h2>Ваши сети</h2><button id="reorder" aria-pressed="false">Изменить порядок</button><div class="filters" aria-label="Фильтр подключений"><button class="selected" data-filter="all" aria-pressed="true">Все</button><button data-filter="active" aria-pressed="false">Активные</button><button data-filter="stopped" aria-pressed="false">Остановленные</button></div></div><div class="section-label"><span>Ваши подключения</span><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро</span></div><p id="order-help" hidden>Перетащите подключение за ⠿ или используйте стрелки. Порядок сохраняется автоматически.</p><div id="cards"></div><footer class="dashboard-footer"><span>Обновление каждые 5 секунд · CPU: 100% = одно ядро<br>Счётчики интерфейсов за сессию, включая служебный трафик</span><span>LOCAL XRAY / <span data-version>…</span></span></footer></main></div>
 <dialog id="editor"><h2 id="heading">Новое подключение</h2><form id="form">
 <div class="grid"><label>Название<input name="name" required maxlength="80"></label><label>Порт SOCKS5<select name="slot"></select></label></div>
-<label>Протокол<select name="kind"><option value="vless">VLESS</option><option value="amneziawg">AmneziaWG</option><option value="openvpn">OpenVPN</option><option value="checkpoint">Check Point (snx-rs)</option></select></label>
+<label>Протокол<select name="kind"><option value="vless">VLESS</option><option value="amneziawg">AmneziaWG</option><option value="openvpn">OpenVPN</option><option value="checkpoint">Check Point (snx-rs)</option><option value="anyconnect">Cisco AnyConnect (OpenConnect)</option></select></label>
 <div id="vless" class="protocol"><label>VLESS-ссылка<textarea name="link" placeholder="vless://…"></textarea></label></div>
 <div id="awg" class="protocol hidden"><label>Конфигурация AmneziaWG<textarea name="amneziawg_config" placeholder="[Interface]… [Peer]…"></textarea></label></div>
 <div id="personal" class="protocol"><label>Уровень журнала<select name="loglevel"><option value="warning">warning</option><option value="info">info</option><option value="error">error</option><option value="none">none</option><option value="debug">debug</option></select></label><label>URL проверки (через запятую)<input name="watchdog_urls" placeholder="По умолчанию Cloudflare и Google"></label><small>TCP и UDP доступны на выбранном порту SOCKS5.</small></div>
 <div id="ovpn"><label>Импорт .ovpn<input id="ovpnfile" type="file" accept=".ovpn,.conf"></label><label>Конфигурация<textarea name="ovpn" placeholder="Вставьте конфигурацию .ovpn."></textarea></label><label>Пароль закрытого ключа (если требуется)<input name="key_password" type="password" autocomplete="new-password"></label></div>
+<div id="gateway" class="protocol"><label>Адрес VPN-сервера<input name="server" placeholder="vpn.example.com или https://vpn.example.com/group"></label></div>
 <div id="cp" class="hidden">
-<label>Адрес сервера Check Point<input name="server" placeholder="vpn.example.com"></label>
 <label>Способ входа (Authentication)<select name="auth_mode"><option value="certificate">Personal Certificate — личный сертификат</option><option value="password">Логин и пароль</option></select></label>
 <div id="cp_certificate" class="protocol">
 <label>Личный сертификат (.p12 / .pfx)<input id="cp_certfile" type="file" accept=".p12,.pfx"></label>
@@ -51,10 +51,24 @@ body{padding:0;max-width:none;background:#090f1a}.shell{min-height:100vh;display
 <label>Имя файла корпоративного CA (необязательно)<input name="ca_file" placeholder="company-ca.pem"></label>
 <small>Это сертификат центра, которому доверяет VPN-сервер, а не ваш личный .p12. При необходимости загрузите его ниже в дополнительных файлах и сначала сохраните профиль.</small>
 </div></details></div>
+<div id="anyconnect" class="protocol hidden">
+<label>Группа входа (необязательно)<input name="authgroup" placeholder="Группа, выбранная в Cisco"></label>
+<small>После подключения подтвердите push на телефоне. Ожидание входа — до 3 минут. Сервер должен поддерживать вход через OpenConnect без браузера.</small>
+<details><summary>Дополнительные настройки AnyConnect / MFA</summary><div class="protocol">
+<label>Поле второго фактора (необязательно)<input name="mfa_form" placeholder="Например, main:secondary_password"></label>
+<label>Значение второго фактора<input name="mfa_value" value="push"></label>
+<small>Оставьте поле второго фактора пустым, если сервер отправляет push автоматически. Если сервер требует выбор push, укажите имя формы и поля, например main:secondary_password или main:password2. Значение обычно push; уточните у администратора VPN.</small>
+<label>Имя файла корпоративного CA (необязательно)<input name="anyconnect_ca" placeholder="company-ca.pem"></label>
+</div></details></div>
 <div id="workfields" class="protocol"><div class="grid" id="account_credentials"><label>Логин<input name="username" autocomplete="off"></label><label>Пароль<input name="password" type="password" autocomplete="new-password"></label></div>
-<label>Корпоративные DNS (IPv4 через запятую)<input name="dns" placeholder="10.20.0.53,10.20.0.54"></label><small>OpenVPN и Check Point получают DNS от VPN-сервера автоматически. Обычно оставьте поле пустым. Заполните его только для ручного выбора корпоративного DNS.</small>
+<label>Корпоративные DNS (IPv4 через запятую)<input name="dns" placeholder="10.20.0.53,10.20.0.54"></label><small>OpenVPN, Check Point и AnyConnect получают DNS от VPN-сервера автоматически. Обычно оставьте поле пустым. Заполните его только для ручного выбора корпоративного DNS.</small>
 <label>Дополнительные файлы (CA, ключи OpenVPN)<input id="assets" type="file" multiple></label><small id="files"></small>
-</div><label>Сайт для проверки подключения<input name="probe_url" placeholder="Например, intranet.company.ru"><small>Проверка идёт через SOCKS этого VPN. Для VLESS и AmneziaWG пустое поле означает проверку интернета; для рабочего VPN укажите доступный через него сайт.</small></label><label class="check"><input type="checkbox" name="watchdog_enabled" checked>Проверять доступность и переподключать VPN</label>
+</div><label>Сайт для проверки подключения<input name="probe_url" placeholder="Например, intranet.company.ru"><small>Проверка идёт через SOCKS этого VPN. Для VLESS и AmneziaWG пустое поле означает проверку интернета; для рабочего VPN укажите доступный через него сайт.</small></label><label class="check"><input type="checkbox" name="watchdog_enabled" checked>Проверять доступность VPN (отключение после трёх неудачных проверок)</label>
+<label class="check"><input type="checkbox" name="reconnect_enabled" checked>Переподключаться при отключении</label>
+<div class="grid"><label>Сколько раз<select name="reconnect_mode"><option value="always">Всегда</option><option value="limited">Заданное число попыток</option></select></label><label id="reconnect_limit" class="hidden">Количество повторов<input name="reconnect_count" type="number" min="1" max="1000" value="3"></label></div>
+<small>Повторы с задержкой от 5 секунд до 5 минут. Лимит считается до восстановления связи; ошибки авторизации останавливают повторы. AnyConnect может снова запросить push.</small>
+<label class="check"><input type="checkbox" name="notify_disconnect">Отправлять push при отключении</label>
+<div id="notifications" class="protocol hidden"><label>Телефоны Home Assistant<select name="notify_targets" multiple size="4"></select></label><small>Выберите один или несколько телефонов из приложения Home Assistant. Одно уведомление на сбой; при ручном отключении уведомление не отправляется.</small><small id="phones_hint" role="status"></small><button type="button" id="reload_phones">Обновить список телефонов</button></div>
 <label class="check"><input type="checkbox" name="autostart">Подключать при запуске аддона</label>
 <small>Пустые поля паролей при редактировании сохраняют прежние значения. Файлы с тем же именем заменяются. Секреты хранятся в данных аддона и попадают в его резервную копию.</small>
 <label class="check"><input type="checkbox" id="clearsecrets">Очистить ранее сохранённые пароли</label>
@@ -72,7 +86,7 @@ async function api(path,data){
 function message(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true},6500)}
 function feedback(id,text){probeFeedback.set(id,text);const el=document.querySelector('[data-profile="'+id+'"] .profile-feedback');if(el){el.textContent=text;el.hidden=!text}}
 function field(k){return form.elements.namedItem(k)}
-function kind(){const k=field('kind').value;for(const [id,visible]of Object.entries({cp:k==='checkpoint',ovpn:k==='openvpn',vless:k==='vless',awg:k==='amneziawg',personal:['vless','amneziawg'].includes(k),workfields:['openvpn','checkpoint'].includes(k),cp_certificate:k==='checkpoint'&&field('auth_mode').value==='certificate',account_credentials:k==='openvpn'||(k==='checkpoint'&&field('auth_mode').value==='password')}))$('#'+id).classList.toggle('hidden',!visible)}
+function kind(){const k=field('kind').value;for(const [id,visible]of Object.entries({cp:k==='checkpoint',anyconnect:k==='anyconnect',gateway:['checkpoint','anyconnect'].includes(k),ovpn:k==='openvpn',vless:k==='vless',awg:k==='amneziawg',personal:['vless','amneziawg'].includes(k),workfields:['openvpn','checkpoint','anyconnect'].includes(k),cp_certificate:k==='checkpoint'&&field('auth_mode').value==='certificate',account_credentials:['openvpn','anyconnect'].includes(k)||(k==='checkpoint'&&field('auth_mode').value==='password')}))$('#'+id).classList.toggle('hidden',!visible)}
 async function edit(profile){
   await refresh();
   const p=profile?await api('profiles/'+profile.id+'/details',{}):null;
@@ -87,9 +101,13 @@ async function edit(profile){
   if(p&&!available.includes(p.port))available.unshift(p.port);
   field('slot').replaceChildren(...available.map(port=>new Option(String(port),String(port-1080))));
   if(!available.length){message('Все порты заняты. Освободите порт, удалив ненужное подключение.');return}
-  for(const [k,v]of Object.entries(p||{})){const el=field(k);if(el){if(el.type==='checkbox')el.checked=v;else el.value=v}}
+  for(const [k,v]of Object.entries(p||{})){const el=field(k);if(el&&k!=='notify_targets'){if(el.type==='checkbox')el.checked=v;else el.value=v}}
+  field('reconnect_mode').value=p?.reconnect_attempts&&p.reconnect_attempts!=='always'?'limited':'always';
+  field('reconnect_count').value=p?.reconnect_attempts&&p.reconnect_attempts!=='always'?p.reconnect_attempts:3;
+  field('notify_targets').replaceChildren(...(p?.notify_targets||[]).map(id=>{const option=new Option(id,id);option.selected=true;return option}));
+  policies();
   $('#files').textContent=p?'Сохранённые файлы: '+(p.files.join(', ')||'нет'):'';
-  kind();$('#editor').showModal();
+  kind();$('#editor').showModal();loadPhones();
 }
 function btn(text,fn,cls=''){const b=document.createElement('button');b.textContent=text;b.className=cls;b.onclick=async()=>{b.disabled=true;try{await fn()}catch(e){message(e.message)}finally{b.disabled=false}};return b}
 async function action(p,a,data={}){const r=await api('profiles/'+p.id+'/'+a,data);await refresh();return r}
@@ -116,16 +134,16 @@ async function refresh(force=false){
   if(profiles.length&&!visible.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='Нет подключений в этой категории';$('#cards').append(empty)}
   for(const p of visible){
     const card=document.createElement('article');card.className='card';card.dataset.profile=p.id;
-    const badge=document.createElement('div');badge.className='protocol-label';const icon=document.createElement('span');icon.className='protocol-icon';icon.textContent=({vless:'V',amneziawg:'A',openvpn:'O',checkpoint:'C'})[p.kind];const name=document.createElement('span');name.textContent=({vless:'VLESS',amneziawg:'AMNEZIA WG',openvpn:'OPENVPN',checkpoint:'CHECK POINT'})[p.kind];badge.append(icon,name);
+    const badge=document.createElement('div');badge.className='protocol-label';const icon=document.createElement('span');icon.className='protocol-icon';icon.textContent=({vless:'V',amneziawg:'A',openvpn:'O',checkpoint:'C',anyconnect:'C'})[p.kind];const name=document.createElement('span');name.textContent=({vless:'VLESS',amneziawg:'AMNEZIA WG',openvpn:'OPENVPN',checkpoint:'CHECK POINT',anyconnect:'ANYCONNECT'})[p.kind];badge.append(icon,name);
     const h=document.createElement('h2');h.textContent=p.name;
     const state=document.createElement('div');state.className='status'+(p.state==='running_unverified'?' online':p.state==='error'?' error':'');
-    state.textContent=({stopped:'Остановлен',starting:'Подключается',stopping:'Отключается',retrying:'Ожидание повторного подключения',error:'Ошибка — откройте журнал',running_unverified:'Запущен'})[p.state]||p.state;
-    const info=document.createElement('p');info.textContent=({vless:'VLESS',amneziawg:'AmneziaWG',openvpn:'OpenVPN',checkpoint:'Check Point'})[p.kind]+' · SOCKS5 :'+p.port+' · TCP/UDP'+(p.dns_port?' · DNS :'+p.dns_port:'');
+    state.textContent=({stopped:'Остановлен',starting:p.kind==='anyconnect'?'Вход / ожидание MFA':'Подключается',stopping:'Отключается',retrying:'Ожидание повторного подключения',error:'Ошибка — откройте журнал',running_unverified:'Запущен'})[p.state]||p.state;
+    const info=document.createElement('p');info.textContent=({vless:'VLESS',amneziawg:'AmneziaWG',openvpn:'OpenVPN',checkpoint:'Check Point',anyconnect:'Cisco AnyConnect'})[p.kind]+' · SOCKS5 :'+p.port+' · TCP/UDP'+(p.dns_port?' · DNS :'+p.dns_port:'');
     const health=document.createElement('p');
     if(p.probe){health.textContent=(p.probe.reachable?'✓ Сайт доступен через VPN':'✕ Нет ответа через VPN')+' · '+new Date(p.probe.checked_at*1000).toLocaleTimeString()+'\n'+p.probe.url+(p.probe.http_status&&p.probe.http_status!=='000'?' · HTTP '+p.probe.http_status:'');health.style.whiteSpace='pre-wrap'}
     else{health.textContent=p.state==='retrying'?'Повтор через '+Math.max(0,Math.ceil(p.retry_at-Date.now()/1000))+' с':p.state==='running_unverified'?(['vless','amneziawg'].includes(p.kind)||p.probe_url?'Проверяем подключение…':'Укажите рабочий сайт в настройках для проверки связи.'):''}
     const dns=document.createElement('p');
-    if(p.dns_status){dns.textContent=p.dns_status.servers.length?'DNS: '+p.dns_status.servers.join(', ')+(['openvpn','checkpoint'].includes(p.dns_status.source)?' · получен от VPN':' · задан вручную'):'Корпоративный DNS пока не получен. Если туннель подключён, укажите DNS в настройках.'}
+    if(p.dns_status){dns.textContent=p.dns_status.servers.length?'DNS: '+p.dns_status.servers.join(', ')+(['openvpn','checkpoint','anyconnect'].includes(p.dns_status.source)?' · получен от VPN':' · задан вручную'):'Корпоративный DNS пока не получен. Если туннель подключён, укажите DNS в настройках.'}
     const a=document.createElement('div');a.className='actions';
     const more=document.createElement('details');more.className='more-actions';const toggle=document.createElement('summary');toggle.textContent='⋯';toggle.setAttribute('aria-label','Действия: '+p.name);const menu=document.createElement('div');menu.className='action-menu';more.append(toggle,menu);
     more.addEventListener('toggle',()=>{if(more.open)for(const other of document.querySelectorAll('.more-actions[open]'))if(other!==more)other.open=false});
@@ -190,6 +208,26 @@ $('#reorder').onclick=async()=>{
 };
 document.addEventListener('click',e=>{for(const menu of document.querySelectorAll('.more-actions[open]'))if(!menu.contains(e.target))menu.open=false});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const menu of document.querySelectorAll('.more-actions[open]')){menu.open=false;menu.querySelector('summary').focus()}});
+function policies(){
+  $('#reconnect_limit').classList.toggle('hidden',field('reconnect_mode').value!=='limited');
+  field('reconnect_mode').disabled=!field('reconnect_enabled').checked;
+  field('reconnect_count').disabled=!field('reconnect_enabled').checked;
+  $('#notifications').classList.toggle('hidden',!field('notify_disconnect').checked);
+}
+async function loadPhones(){
+  const selected=[...field('notify_targets').selectedOptions].map(option=>option.value);
+  $('#phones_hint').textContent='Загружаем телефоны…';
+  try{
+    const phones=await api('phones');const ids=new Set(phones.map(phone=>phone.id));
+    for(const id of selected)if(!ids.has(id))phones.push({id,name:id+' (сервис сейчас недоступен)'});
+    field('notify_targets').replaceChildren(...phones.map(phone=>{const option=new Option(phone.name,phone.id);option.selected=selected.includes(phone.id);return option}));
+    $('#phones_hint').textContent=phones.length?'':'Телефоны не найдены. Подключите мобильное приложение Home Assistant и обновите список.';
+  }catch(e){$('#phones_hint').textContent=e.message}
+}
+field('reconnect_mode').onchange=policies;
+field('reconnect_enabled').onchange=policies;
+field('notify_disconnect').onchange=policies;
+$('#reload_phones').onclick=loadPhones;
 field('kind').onchange=kind;
 field('auth_mode').onchange=()=>{field('login_type').value='';kind()};
 field('server').oninput=()=>{field('login_type').replaceChildren(new Option('Определить автоматически при подключении',''));$('#cp_methods_hint').textContent='Адрес изменён — получите методы входа заново.'};
@@ -213,6 +251,10 @@ form.onsubmit=async e=>{
   e.preventDefault();const button=form.querySelector('[type=submit]');button.disabled=true;
   try{
     const data=Object.fromEntries(new FormData(form));data.id=editing;data.slot=Number(data.slot);
+    data.reconnect_enabled=field('reconnect_enabled').checked;
+    data.reconnect_attempts=field('reconnect_mode').value==='always'?'always':Number(field('reconnect_count').value);
+    data.notify_disconnect=field('notify_disconnect').checked;
+    data.notify_targets=[...field('notify_targets').selectedOptions].map(option=>option.value);
     data.autostart=field('autostart').checked;data.watchdog_enabled=field('watchdog_enabled').checked;data.uploads={};
     if($('#clearsecrets').checked)data.clear_secrets=['password','cert_password','key_password'];
     const uploads=[...$('#assets').files].map(file=>({file,name:file.name}));
