@@ -30,7 +30,7 @@ static char *read_field(FILE *stream)
 static int open_sso(struct openconnect_info *vpn, const char *uri, void *data)
 {
     (void)data;
-    int pair[2], result = -EINVAL;
+    int pair[2], result = -EINVAL, completed = 0;
     if (!uri || strchr(uri, '\n') || socketpair(AF_UNIX, SOCK_STREAM, 0, pair)) return result;
     pid_t pid = fork();
     if (pid < 0) { close(pair[0]); close(pair[1]); return result; }
@@ -62,6 +62,7 @@ static int open_sso(struct openconnect_info *vpn, const char *uri, void *data)
                 struct oc_webview_result report = { .uri = url, .cookies = (const char **)cookies, .headers = NULL };
                 result = openconnect_webview_load_changed(vpn, &report);
                 fprintf(stream, "%d\n", result); fflush(stream);
+                if (result != -EAGAIN) completed = 1;
             }
             free(url);
             for (int i = 0; i < 512; i++) free(cookies[i]);
@@ -69,7 +70,9 @@ static int open_sso(struct openconnect_info *vpn, const char *uri, void *data)
         }
         fclose(stream);
     } else close(pair[0]);
-    kill(pid, SIGTERM);
+    /* A final report already tells Python to close Chromium. Interrupting its
+     * finally block here can leave a frame or browser database behind. */
+    if (!completed) kill(pid, SIGTERM);
     while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) {}
     if (result) fputs("AnyConnect: SSO authentication failed or timed out\n", stderr);
     return result;

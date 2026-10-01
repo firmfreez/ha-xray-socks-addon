@@ -141,7 +141,10 @@ class Runtime:
                         'authentication form repeated; automatic submission stopped',
                         'sso authentication failed or timed out', 'no sso handler')):
                     self.auth_failed.set()
-                    self.log('AnyConnect: вход не завершён. Проверьте логин, пароль, группу входа и поле MFA. '
+                    self.log('AnyConnect: веб-вход SSO не завершён. Откройте журнал, проверьте группу входа и CA, '
+                             'затем подключите профиль и откройте SSO-окно снова.'
+                             if self.p.get('anyconnect_auth') == 'sso' else
+                             'AnyConnect: вход не завершён. Проверьте логин, пароль, группу входа и поле MFA. '
                              'Повторный запрос Password может быть вторым фактором или отказом в первичном входе.', emit=False)
                 self.log(('' if log else '[runtime] ') + line.rstrip(), emit=False)
         proc.log_reader = threading.Thread(target=reader, daemon=True)
@@ -395,7 +398,9 @@ class Runtime:
                         '--reconnect-timeout', '1', '--force-dpd', '20', '--disable-ipv6']
                 if self.p.get('authgroup'):
                     args += ['--authgroup', self.p['authgroup']]
-                if self.p.get('mfa_form') == 'main:password':
+                if sso:
+                    pass
+                elif self.p.get('mfa_form') == 'main:password':
                     self.log('Поле main:password содержит основной пароль. Ответ MFA для него отключён, '
                              'чтобы не повторять отправку push в форму входа.')
                 elif self.p.get('mfa_form'):

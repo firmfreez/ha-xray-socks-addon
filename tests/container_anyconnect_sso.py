@@ -75,6 +75,8 @@ def main():
                     raise AssertionError('Browser did not produce a frame: ' + error)
                 time.sleep(.1)
             assert (work / 'sso-frame.png').read_bytes().startswith(b'\x89PNG')
+            assert (work / 'sso-frame.png').stat().st_mode & 0o777 == 0o600
+            assert (work / 'browser').stat().st_uid == 64000
             session = json.loads((work / 'sso-state.json').read_text())['session']
             for data in ({'type': 'text', 'text': 'test-otp'}, {'type': 'key', 'key': 'Enter'}):
                 path = work / 'sso-input.json'
@@ -86,7 +88,8 @@ def main():
             output, error = proc.communicate(timeout=20)
             assert proc.returncode == 0, error
             assert tokens == ['test-sso-token'], tokens
-            assert output.strip() == 'test-vpn-session', 'Wrong VPN session'
+            # Newer OpenConnect preserves STRAP key material alongside webvpn.
+            assert output.strip() == 'test-vpn-session' or output.strip().endswith('; webvpn=test-vpn-session'), 'Wrong VPN session'
             assert 'test-otp' not in error and 'test-sso-token' not in error
             assert not (work / 'sso-state.json').exists()
             assert not (work / 'sso-frame.png').exists()
