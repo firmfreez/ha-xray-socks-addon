@@ -1,3 +1,12 @@
+# 0.8.2
+
+- Log safe AnyConnect authentication form/field identifiers, types and callback
+  results through the public libopenconnect API; do not log field values,
+  hidden inputs, HTML/XML, action URLs, banners or server error contents.
+- Keep the stock OpenConnect authentication callback and TLS verification.
+- Distinguish incomplete AnyConnect login from confirmed credential rejection
+  and avoid repeating the explanatory warning for the same failure.
+
 # 0.8.1
 
 - Answer standard AnyConnect secondary-password and challenge fields with the

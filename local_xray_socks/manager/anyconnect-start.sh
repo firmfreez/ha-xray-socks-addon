@@ -6,4 +6,4 @@ shift
 mount --bind "$work/transport-resolv.conf" /etc/resolv.conf
 mkdir -p /var/run/vpnc
 mount --bind "$work/vpnc" /var/run/vpnc
-exec openconnect "$@" < "$work/password"
+exec env LD_PRELOAD=/usr/local/lib/anyconnect-forms.so LC_ALL=C openconnect "$@" < "$work/password"

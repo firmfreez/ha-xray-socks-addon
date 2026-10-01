@@ -136,7 +136,7 @@ class Runtime:
                        ('auth_failed', 'authentication failed', 'authentication failure',
                         'invalid credentials', 'login failed', 'certificate verify failed')):
                     self.auth_failed.set()
-                if log and self.p['kind'] == 'anyconnect' and any(marker in line.lower() for marker in
+                if log and self.p['kind'] == 'anyconnect' and not self.auth_failed.is_set() and any(marker in line.lower() for marker in
                        ('user input required in non-interactive mode', 'failed to complete authentication')):
                     self.auth_failed.set()
                     self.log('AnyConnect: вход не завершён. Проверьте логин, пароль, группу входа и поле MFA. '
@@ -192,8 +192,9 @@ class Runtime:
             while self.state in ('running_unverified', 'starting') and not self.cancelled.wait(2):
                 if self.auth_failed.is_set():
                     self.retryable = False
-                    self.log('Авторизация или проверка сертификата отклонена. Исправьте настройки и подключите профиль снова.')
-                    reason = 'Сервер отклонил авторизацию или сертификат.'
+                    reason = ('Вход AnyConnect не завершён. Проверьте строки AnyConnect form/field в журнале.'
+                              if self.p['kind'] == 'anyconnect' else 'Сервер отклонил авторизацию или сертификат.')
+                    self.log(reason + ' Исправьте настройки и подключите профиль снова.')
                     break
                 if any(p.poll() is not None for p in self.children):
                     # Read the final AUTH_FAILED line before deciding to retry.
