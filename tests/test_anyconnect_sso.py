@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -66,6 +67,26 @@ class SSOTests(unittest.TestCase):
             self.assertIsNone(manager.sso_state(runtime))
             with self.assertRaises(ValueError):
                 manager.action(p['id'], 'sso-input', dict(type='key', key='Enter', session='current'))
+
+    def test_network_files_readable_under_production_umask(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = Runtime(self.profile(password='saved-secret'), root)
+            runtime.work = root / 'run'
+            old_umask = os.umask(0o077)
+            try:
+                with patch('runtime.NETNS_ROOT', root / 'netns'), \
+                     patch('runtime.endpoint_addresses', return_value=['192.0.2.1']), \
+                     patch('runtime.run', return_value=MagicMock(stdout='1')), patch.object(runtime, 'spawn'):
+                    runtime.start()
+            finally:
+                os.umask(old_umask)
+            for path in (runtime.work / 'transport-resolv.conf',
+                         root / 'netns' / runtime.ns / 'hosts',
+                         root / 'netns' / runtime.ns / 'resolv.conf'):
+                self.assertEqual(path.stat().st_mode & 0o777, 0o644, str(path))
+            self.assertIn('192.0.2.1 vpn.example', (root / 'netns' / runtime.ns / 'hosts').read_text())
+            self.assertEqual((runtime.work / 'password').stat().st_mode & 0o777, 0o600)
 
     def test_input_is_bounded_and_cannot_execute_browser_commands(self):
         for data in ({'type': 'navigate', 'url': 'file:///data'}, {'type': 'text', 'text': 'x' * 4097},

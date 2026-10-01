@@ -1,3 +1,9 @@
+# 0.9.1
+
+- Make the AnyConnect transport resolver and namespace host mappings readable
+  by the unprivileged SSO browser under the manager's restrictive umask.
+  Fix ERR_NAME_NOT_RESOLVED during web login; credential files stay private.
+
 # 0.9.0
 
 - Add opt-in AnyConnect SSO/SAML web login through an ephemeral Chromium window

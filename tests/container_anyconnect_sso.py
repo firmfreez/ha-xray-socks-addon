@@ -7,8 +7,14 @@ import subprocess
 import tempfile
 import threading
 import time
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from xml.etree import ElementTree as ET
+from unittest.mock import MagicMock, patch
+
+sys.path.insert(0, '/app')
+from model import validate
+from runtime import Runtime
 
 
 def main():
@@ -16,9 +22,26 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         work.chmod(0o755)
+        # Use runtime-generated files with the production umask, rather than
+        # the image's already-readable /etc files. This catches Chromium EACCES.
+        hostname = 'sso.fixture.test'
+        runtime = Runtime(validate(dict(name='SSO fixture', kind='anyconnect',
+                          anyconnect_auth='sso', server=hostname)), work)
+        runtime.work = work / 'generated'
+        with patch('runtime.NETNS_ROOT', work / 'netns'), \
+             patch('runtime.endpoint_addresses', return_value=['127.0.0.1']), \
+             patch('runtime.run', return_value=MagicMock(stdout='1')), patch.object(runtime, 'spawn'):
+            runtime.start()
+        for source, target in ((work / 'netns' / runtime.ns / 'hosts', Path('/etc/hosts')),
+                               (runtime.work / 'transport-resolv.conf', Path('/etc/resolv.conf'))):
+            target.write_bytes(source.read_bytes())
+            target.chmod(source.stat().st_mode & 0o777)
+        subprocess.run(['setpriv', '--reuid=64000', '--regid=64000', '--clear-groups',
+                        'python3', '-c', "from pathlib import Path; Path('/etc/hosts').read_text(); Path('/etc/resolv.conf').read_text()"],
+                       check=True, capture_output=True)
         cert, key = work / 'ca.pem', work / 'key.pem'
         subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
-            '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost',
+            '-subj', '/CN=' + hostname, '-addext', 'subjectAltName=DNS:' + hostname,
             '-keyout', str(key), '-out', str(cert)], check=True, capture_output=True)
         tokens = []
         class Handler(BaseHTTPRequestHandler):
@@ -60,7 +83,7 @@ def main():
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(cert, key)
         server.socket = context.wrap_socket(server.socket, server_side=True)
-        url = f'https://localhost:{server.server_port}'
+        url = f'https://{hostname}:{server.server_port}'
         threading.Thread(target=server.serve_forever, daemon=True).start()
         env = dict(os.environ, ANYCONNECT_SSO_WORK=str(work), ANYCONNECT_SSO_UID='64000',
                    ANYCONNECT_SSO_CA=str(cert), LD_PRELOAD='/usr/local/lib/anyconnect-forms.so')
@@ -94,7 +117,7 @@ def main():
             assert not (work / 'sso-state.json').exists()
             assert not (work / 'sso-frame.png').exists()
             assert not (work / 'browser').exists()
-            print('PASS: real libopenconnect callback, TLS browser, manual input, SSO token, VPN cookie and cleanup')
+            print('PASS: production DNS/hosts permissions, unprivileged Chromium hostname resolution, TLS SSO and cleanup')
         finally:
             if proc.poll() is None:
                 proc.kill()

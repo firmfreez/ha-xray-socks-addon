@@ -324,6 +324,9 @@ class Runtime:
                 for address in addresses:
                     mappings += f'{address} {host}\n'
             (nsdir / 'hosts').write_text(mappings)
+            # ip netns bind-mounts this file as /etc/hosts. Chromium and other
+            # unprivileged profile processes must be able to read the mapping.
+            (nsdir / 'hosts').chmod(0o644)
             if self.cancelled.is_set():
                 self._cleanup()
                 return
@@ -346,6 +349,7 @@ class Runtime:
                              if line.startswith('nameserver ') and len(line.split()) > 1]
                 self.spawn(['python3', '/app/dns_forward.py', self.gateway, ','.join(upstreams), '53'], log=False)
                 (nsdir / 'resolv.conf').write_text(f'nameserver {self.gateway}\n')
+                (nsdir / 'resolv.conf').chmod(0o644)
                 self.start_personal(ns)
                 self.start_bridge()
                 self.started()
@@ -355,7 +359,11 @@ class Runtime:
                              if line.startswith('nameserver ') and len(line.split()) > 1]
                 self.spawn(['python3', '/app/dns_forward.py', self.gateway, ','.join(upstreams), '53'], log=False)
                 (nsdir / 'resolv.conf').write_text(f'nameserver {self.gateway}\n')
-                self.write('transport-resolv.conf', f'nameserver {self.gateway}\n')
+                (nsdir / 'resolv.conf').chmod(0o644)
+                transport = Path(self.write('transport-resolv.conf', f'nameserver {self.gateway}\n'))
+                # The AnyConnect mount namespace also contains the SSO browser.
+                # Resolver addresses are public configuration, unlike credentials.
+                transport.chmod(0o644)
             # Only replies on the veth are allowed for the unprivileged SOCKS user.
             # VPN transport runs as root. Direct SOCKS/DNS fallbacks are rejected.
             run(*ns, 'iptables', '-A', 'OUTPUT', '-m', 'conntrack', '--ctstate', 'ESTABLISHED,RELATED', '-j', 'ACCEPT')
